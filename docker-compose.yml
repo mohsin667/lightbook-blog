@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: lightbook_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lightbook_app
+      POSTGRES_PASSWORD: au7AKch6jF+BoOMX8hGCEJw65PDj5WDE
+      POSTGRES_DB: lightbook
+    ports:
+      - "5433:5432"
+    volumes:
+      - lightbook_pgdata:/var/lib/postgresql/data
+
+volumes:
+  lightbook_pgdata:
