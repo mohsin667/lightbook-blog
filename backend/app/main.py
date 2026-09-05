@@ -3,10 +3,13 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, Depends, HTTPException, Response, Cookie, Query
 from sqlmodel import Session, select
 from fastapi.middleware.cors import CORSMiddleware
+from app.core.config import settings
 from app.models.user import User
 from app.schemas.user import UserCreate, UserPublic, UserLogin
+from app.schemas.upload import PresignRequest
 from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token, decode_token
 from app.core.db import get_session
+from app.core.s3 import s3_client
 from app.deps import (
     get_current_user, generate_slug, generate_username, get_current_user_optional,
     get_owned_post, apply_publish, require_admin, generate_category_slug,
@@ -372,3 +375,33 @@ def refresh_access_token(response: Response, refresh_token: str = Cookie(None)):
     )
 
     return {"message": "Token refreshed"}
+
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+
+@app.post("/api/uploads/presign")
+def presign_upload(
+    data: PresignRequest, current_user: User = Depends(get_current_user),
+):
+    if data.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=400, detail="Unsupported file type")
+
+    extension = data.filename.rsplit(".", 1)[-1] if "." in data.filename else "bin"
+    key = f"posts/{uuid.uuid4()}.{extension}"
+
+    upload_url = s3_client.generate_presigned_url(
+        "put_object",
+        Params={
+            "Bucket": settings.s3_bucket_name,
+            "Key": key,
+            "ContentType": data.content_type,
+        },
+        ExpiresIn=300,
+    )
+
+    file_url = f"https://{settings.s3_bucket_name}.s3.{settings.aws_region}.amazonaws.com/{key}"
+
+    return {"upload_url": upload_url, "file_url": file_url}
+
+@app.get("/api/users", response_model=list[UserPublic])
+def list_users(session: Session = Depends(get_session)):
+    return session.exec(select(User)).all()

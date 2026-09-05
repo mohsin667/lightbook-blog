@@ -31,6 +31,7 @@ export function HomePage() {
       .slice(0, 3);
   }, [posts]);
 
+
   return (
     <div className="max-w-[1080px] mx-auto px-6 pt-7">
       {featured && <FeaturedHero post={featured} />}
@@ -51,22 +52,13 @@ export function HomePage() {
             >
               All
             </button>
-            {categories.map((c) => {
-              const Icon = getCategoryIcon(c.icon);
-              return (
-                <button
-                  key={c.name}
-                  onClick={() => setFilter(c.name)}
-                  className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-display font-semibold border ${filter === c.name
-                    ? 'border-coral bg-coral-light text-ink'
-                    : 'border-transparent bg-surface-tint text-ink'
-                    }`}
-                >
-                  <Icon size={13} strokeWidth={1.75} className="text-coral" />
+            {/* <select className="bg-surface border border-border rounded-xl py-1.75 px-2" value={filter} onChange={(e) => setFilter(e.target.value)}>
+              {categories.map((c) => (
+                <option key={c.id} value={c.name}>
                   {c.name}
-                </button>
-              );
-            })}
+                </option>
+              ))}
+            </select> */}
           </div>
           <PostGrid posts={others} emptyMessage="No posts in this category yet." />
         </div>

@@ -125,6 +125,10 @@ def get_post_tags(post_id: uuid.UUID, session: Session) -> list[Tag]:
 
 def serialize_post(post: Post, session: Session) -> dict:
     tags = get_post_tags(post.id, session)
+    author = session.get(User, post.author_id)
+    category = session.get(Category, post.category_id) if post.category_id else None
     data = post.model_dump()
     data["tags"] = [{"id": t.id, "name": t.name, "slug": t.slug} for t in tags]
+    data["author_name"] = author.display_name if author else "Unknown"
+    data["category_name"] = category.name if category else None
     return data

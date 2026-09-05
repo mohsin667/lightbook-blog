@@ -6,12 +6,15 @@ export interface Comment {
 
 export interface Post {
   id: string;
+  slug: string;
   title: string;
   excerpt: string;
   content: string; // markdown-ish: blank-line paragraphs, ```lang fenced code blocks, `inline code`
-  category: string;
+  category_id: string;
+  category_name?: string;
   authorId: string;
-  image: string;
+  author_name: string;
+  cover_image_url: string;
   status: 'published' | 'draft' | 'flagged';
   createdAt: number; // epoch ms
   views: number;
@@ -32,18 +35,19 @@ export interface User {
 
 export interface Category {
   name: string;
-  icon: string; // lucide icon name
+  icon: string;
+  id: string
 }
 
 const now = Date.now();
 const day = 86400000;
 
 export const categories: Category[] = [
-  { name: 'Travel', icon: 'Plane' },
-  { name: 'Food', icon: 'Soup' },
-  { name: 'Design', icon: 'Palette' },
-  { name: 'Life', icon: 'Sun' },
-  { name: 'Tech', icon: 'Laptop' },
+  { name: 'Travel', icon: 'Plane', id: '07e3603c-df4a-4eb0-bfa7-922ea3408b74'},
+  { name: 'Food', icon: 'Soup', id: '07e3603c-df4a-4eb0-bfa7-922ea3408b74' },
+  { name: 'Design', icon: 'Palette', id: '07e3603c-df4a-4eb0-bfa7-922ea3408b74' },
+  { name: 'Life', icon: 'Sun', id: '07e3603c-df4a-4eb0-bfa7-922ea3408b74' },
+  { name: 'Tech', icon: 'Laptop', id: '07e3603c-df4a-4eb0-bfa7-922ea3408b74' },
 ];
 
 export const users: User[] = [

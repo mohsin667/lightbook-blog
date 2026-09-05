@@ -25,7 +25,9 @@ class PostPublic(BaseModel):
     excerpt: str
     content: str
     author_id: uuid.UUID
+    author_name: str
     category_id: Optional[uuid.UUID] = None
+    category_name: Optional[str] = None
     status: PostType
     read_time_minutes: int
     view_count: int

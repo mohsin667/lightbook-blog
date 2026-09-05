@@ -13,8 +13,8 @@ export function FeaturedHero({ post }: FeaturedHeroProps) {
       to={`/post/${post.id}`}
       className="relative block rounded-2xl overflow-hidden border border-border min-h-[300px] mb-7 bg-surface"
     >
-      <img src={post.image} alt="" className="absolute inset-0 w-full h-full object-cover" />
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(13,15,19,0)_30%,rgba(13,15,19,0.92)_100%)]" />
+      <img src={post.cover_image_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(13,15,19,0)_0%,rgba(13,15,19,0.92)_100%)]" />
       <div className="relative z-10 p-8 pt-32">
         <div className="flex items-center gap-1.5 mb-3.5">
           <span className="w-2 h-2 bg-coral rounded-sm inline-block" />

@@ -5,14 +5,15 @@ export interface AvatarProps {
   size?: number;
 }
 
-export function Avatar({ user, size = 32 }: AvatarProps) {
-  const initial = user.name.trim()[0]?.toUpperCase() ?? '?';
+// export function Avatar({ user, size = 32 }: AvatarProps) {
+export function Avatar({ size = 32 }) {
+  // const initial = user.name.trim()[0]?.toUpperCase() ?? '?';
   return (
     <div
       className="rounded-full flex items-center justify-center font-display font-bold flex-shrink-0 bg-surface-tint text-ink"
       style={{ width: size, height: size, fontSize: Math.round(size * 0.42) }}
     >
-      {initial}
+      MA
     </div>
   );
 }

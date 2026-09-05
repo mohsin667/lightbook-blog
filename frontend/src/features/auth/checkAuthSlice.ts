@@ -1,16 +1,16 @@
 import { createAsyncThunk } from "@reduxjs/toolkit";
+import  refreshAPI  from "../../api/refreshAPI";
 
 export const checkAuth = createAsyncThunk('/api/auth/me', async (_, {rejectWithValue}) => {
-    const res = await fetch('http://localhost:8000/api/auth/me', {credentials: 'include'})
+    const res = await refreshAPI('/api/auth/me')
     if(!res.ok) return rejectWithValue('Not authenticated')
     return res.json()
 })
 
 export const loginUser = createAsyncThunk('auth/login', async (credentials:{email: string, password: string}, {rejectWithValue})=> {
-    const res = await fetch('http://localhost:8000/api/auth/login', {
+    const res = await refreshAPI('/api/auth/login', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        credentials: 'include',
         body: JSON.stringify(credentials)
     })
     if(!res.ok) {
@@ -26,10 +26,9 @@ export const registerUser = createAsyncThunk(
     credentials: { username: string, email: string; password: string; display_name: string },
     { rejectWithValue }
   ) => {
-    const res = await fetch('http://localhost:8000/api/auth/register', {
+    const res = await refreshAPI('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
       body: JSON.stringify(credentials)
     })
     if (!res.ok) {
@@ -40,11 +39,10 @@ export const registerUser = createAsyncThunk(
 )
 
 export const logoutUser = createAsyncThunk('auth/logout', async (_,{ rejectWithValue }) => {
-    const res = await fetch('http://localhost:8000/api/auth/logout',
+    const res = await refreshAPI('/api/auth/logout',
         {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
         }
     )
     if (!res.ok) {

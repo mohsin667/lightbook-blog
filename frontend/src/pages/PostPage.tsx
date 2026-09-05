@@ -14,25 +14,21 @@ import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { incrementViews, toggleLike, addComment, reportPost } from '../features/posts/postsSlice';
 import { showToast } from '../features/toast/toastSlice';
 import { CURRENT_USER_ID, getUserById, readTime, timeAgo } from '../data/mockData';
+import { getPost } from '../features/posts/createPostThunk';
 
 export function PostPage() {
+
   const { id = '' } = useParams();
   const dispatch = useAppDispatch();
   const posts = useAppSelector((s) => s.posts.list);
+  const post = useAppSelector((s) => s.posts.current);
   const currentUserName = useAppSelector(
     (s) => s.users.list.find((u) => u.id === CURRENT_USER_ID)?.name ?? '',
   );
-  const countedRef = useRef<string | null>(null);
-
-  const post = posts.find((p) => p.id === id);
-
+  console.log(post, "post in postpage")
   useEffect(() => {
-    if (post && countedRef.current !== id) {
-      countedRef.current = id;
-      dispatch(incrementViews(id));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+    dispatch(getPost(id))
+  }, [])
 
   if (!post) {
     return (
@@ -43,7 +39,7 @@ export function PostPage() {
   }
 
   const author = getUserById(post.authorId);
-  const related = posts.filter((p) => p.category === post.category && p.id !== post.id && p.status === 'published').slice(0, 2);
+  const related = posts.filter((p) => p.category === post?.category && p.id !== post?.id && p.status === 'published').slice(0, 2);
   const liked = false;
 
   return (
@@ -54,7 +50,7 @@ export function PostPage() {
       </Link>
 
       <div className="flex items-center gap-2 flex-wrap">
-        <CategoryBadge category={post.category} />
+        <CategoryBadge category_name={post.category_name} />
         <StatusBadge status={post.status} />
       </div>
 
@@ -78,7 +74,7 @@ export function PostPage() {
       )}
 
       <div className="w-full aspect-video rounded-xl overflow-hidden border border-border mb-6.5">
-        <img src={post.image} alt="" className="w-full h-full object-cover block" />
+        <img src={post.cover_image_url} alt="" className="w-full h-full object-cover block" />
       </div>
 
       <PostContent content={post.content} />
@@ -100,22 +96,22 @@ export function PostPage() {
       <hr className="border-border my-6" />
       <div className="flex items-center gap-2 text-lg font-display font-bold mb-3.5">
         <MessageCircle size={18} strokeWidth={1.75} />
-        Comments ({post.comments.length})
+        Comments ({post?.comments?.length})
       </div>
-      <CommentList comments={post.comments} />
+      {/* <CommentList comments={post?.comments} />
       <CommentForm
         onSubmit={(text) => {
           dispatch(addComment({ postId: post.id, author: currentUserName, text }));
           dispatch(showToast('Comment added', MessageCircle));
         }}
-      />
+      /> */}
 
       {related.length > 0 && (
         <>
           <hr className="border-border my-6" />
           <div className="flex items-center gap-2 text-lg font-display font-bold mb-3.5">
             <Star size={18} strokeWidth={1.75} />
-            More in {post.category}
+            More in {post?.category}
           </div>
           <PostGrid posts={related} />
         </>

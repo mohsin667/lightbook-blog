@@ -16,16 +16,16 @@ export function getCategoryIcon(iconName: string): LucideIcon {
 }
 
 export interface CategoryBadgeProps {
-  category: string;
+  category_name?: string | null;
 }
 
-export function CategoryBadge({ category }: CategoryBadgeProps) {
-  const cat = getCategory(category);
-  const Icon = getCategoryIcon(cat.icon);
+export function CategoryBadge({ category_name }: CategoryBadgeProps) {
+  const cat = category_name ? getCategory(category_name) : null;
+  const Icon = getCategoryIcon(cat?.icon || 'Tag');
   return (
     <Badge variant="neutral">
       <Icon size={13} strokeWidth={1.75} className="text-coral" />
-      {cat.name}
+      {cat?.name || category_name}
     </Badge>
   );
 }

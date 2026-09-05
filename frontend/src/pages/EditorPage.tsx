@@ -7,8 +7,9 @@ import { Textarea } from '../components/ui/Textarea';
 import { Button } from '../components/ui/Button';
 import { InlineCode } from '../components/post/InlineCode';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
-import { postCreated, postUpdated, deletePost } from '../features/posts/postsSlice';
 import { showToast } from '../features/toast/toastSlice';
+import { createPosts } from '../features/posts/createPostThunk';
+import refreshAPI from '../api/refreshAPI';
 
 export function EditorPage() {
   const { id } = useParams();
@@ -17,14 +18,17 @@ export function EditorPage() {
   const posts = useAppSelector((s) => s.posts.list);
   const categories = useAppSelector((s) => s.categories.list);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const uploadInput = useRef<HTMLInputElement>(null);
 
   const editing = id ? posts.find((p) => p.id === id) : undefined;
 
   const [title, setTitle] = useState(editing?.title ?? '');
-  const [category, setCategory] = useState(editing?.category ?? categories[0]?.name ?? '');
+  const [category, setCategory] = useState('');
   const [excerpt, setExcerpt] = useState(editing?.excerpt ?? '');
-  const [image, setImage] = useState(editing?.image ?? `https://picsum.photos/seed/${Date.now()}/900/600`);
+  const [image, setImage] = useState<string>("");
   const [content, setContent] = useState(editing?.content ?? '');
+  const [uploading, setUploading] = useState(false);
+
 
   const insertAtCursor = (before: string, after: string, placeholder: string) => {
     const ta = textareaRef.current;
@@ -48,27 +52,58 @@ export function EditorPage() {
     }
     const input = {
       title: title.trim(),
-      category,
-      excerpt: excerpt.trim() || 'No excerpt yet.',
-      content: content.trim() || 'Nothing written yet.',
-      image: image.trim() || `https://picsum.photos/seed/${Date.now()}/900/600`,
-      status,
+      excerpt: excerpt.trim(),
+      content: content.trim(),
+      cover_image_url: image,
+      category_id: category,
+      tags: [],
+      publish: status === 'published',
     };
-    if (editing) {
-      dispatch(postUpdated({ id: editing.id, ...input }));
-    } else {
-      dispatch(postCreated(input));
-    }
+    dispatch(createPosts(input));
     dispatch(showToast(status === 'published' ? 'Post published' : 'Draft saved', Check));
     navigate(status === 'published' ? '/' : '/dashboard');
   };
 
   const handleDelete = () => {
     if (!editing) return;
-    dispatch(deletePost(editing.id));
     dispatch(showToast('Post deleted', Trash2));
     navigate('/dashboard');
   };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+    const previewURL = URL.createObjectURL(file);
+    setImage(previewURL);
+
+    try {
+      setUploading(true)
+      const presignRes = await refreshAPI('/api/uploads/presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ "filename": file.name, "content_type": file.type })
+      })
+
+      const { upload_url, file_url } = await presignRes.json();
+
+      await fetch(upload_url, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file
+      })
+      setImage(file_url);
+      URL.revokeObjectURL(previewURL);
+      dispatch(showToast('Image uploaded successfully'));
+    }
+    catch (err) {
+      dispatch(showToast('Image upload failed'));
+    }
+    finally {
+      setUploading(false)
+    }
+
+  }
 
   return (
     <div className="max-w-[680px] mx-auto px-6 pt-7">
@@ -81,7 +116,7 @@ export function EditorPage() {
       <div className="mb-4.5">
         <Select label="Category" value={category} onChange={(e) => setCategory(e.target.value)}>
           {categories.map((c) => (
-            <option key={c.name} value={c.name}>
+            <option key={c.id} value={c.id}>
               {c.name}
             </option>
           ))}
@@ -98,15 +133,23 @@ export function EditorPage() {
       </div>
 
       <div className="mb-4.5">
-        <Input
-          label="Cover image URL"
-          value={image}
-          onChange={(e) => setImage(e.target.value)}
-          placeholder="https://…"
-        />
-        <div className="w-full aspect-video rounded-lg overflow-hidden border border-border-strong mt-2.5 bg-surface-tint">
-          {image && <img src={image} alt="" className="w-full h-full object-cover block" />}
+        <div className="flex relative">
+          {!uploading && (
+            <>
+              <label id="upload-image" className="absolute z-0 top-2">Upload Image</label>
+              <input ref={uploadInput} name="upload-image" type="file" accept="image/*" onChange={handleFileSelect} className="text-transparent position-relative w-37.5 z-10 cursor-pointer" />
+              <Button variant="danger" className="ml-2" onClick={() => uploadInput.current?.click()}>
+                Upload
+              </Button>
+            </>
+
+          )}
         </div>
+        {image !== "" &&
+          <div className="w-full aspect-video rounded-lg overflow-hidden border border-border-strong mt-2.5 bg-surface-tint">
+            <img src={image} alt="" className="w-full h-full object-cover block" />
+          </div>
+        }
       </div>
 
       <div className="mb-4.5">
