@@ -25,8 +25,12 @@ export function PostCard({ post }: PostCardProps) {
           <p className="font-display font-bold text-[17px] leading-snug m-0">{post.title}</p>
           <p className="text-sm text-ink-soft m-0 flex-1">{post.excerpt}</p>
           <div className="flex items-center gap-2 text-[12.5px] text-ink-soft">
-            <Avatar size={20} />
-            <span>{post.author_name || 'Unknown'}</span>
+            <span title={post.author_name}>
+              <Avatar user={post.author_name} size={20} />
+            </span>
+            <span title={post.author_name} style={{ textOverflow: 'ellipsis', whiteSpace: 'nowrap', overflow: 'hidden', width: '115px' }}>
+              {post.author_name || 'Unknown'}
+            </span>
             <span className="opacity-50">·</span>
             <span>{readTime(post.content)}</span>
             <span className="opacity-50">·</span>

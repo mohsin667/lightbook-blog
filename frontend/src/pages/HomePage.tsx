@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FileText, PenLine, Tag, Users } from 'lucide-react';
 import { FeaturedHero } from '../components/post/FeaturedHero';
@@ -7,34 +7,16 @@ import { getCategoryIcon } from '../components/post/CategoryBadge';
 import { Card } from '../components/ui/Card';
 import { Avatar } from '../components/ui/Avatar';
 import { useAppSelector } from '../app/hooks';
-import { getUserById } from '../data/mockData';
 
 export function HomePage() {
   const posts = useAppSelector((s) => s.posts.list);
   const categories = useAppSelector((s) => s.categories.list);
-  const featuredId = useAppSelector((s) => s.posts.featuredId);
-  const { status } = useAppSelector((s) => s.auth);
+  const topAuthors = useAppSelector((s) => s.users.list);
   const [filter, setFilter] = useState('All');
 
-  const published = posts.filter((p) => p.status === 'published');
-  const featured = published.find((p) => p.id === featuredId) ?? published[0];
-  const filtered = filter === 'All' ? published : published.filter((p) => p.category === filter);
-  const others = filtered.filter((p) => p.id !== featured?.id);
-
-  const topAuthors = useMemo(() => {
-    const viewsByAuthor: Record<string, number> = {};
-    posts.forEach((p) => {
-      viewsByAuthor[p.authorId] = (viewsByAuthor[p.authorId] || 0) + p.views;
-    });
-    return Object.entries(viewsByAuthor)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3);
-  }, [posts]);
-
-
   return (
-    <div className="max-w-[1080px] mx-auto px-6 pt-7">
-      {featured && <FeaturedHero post={featured} />}
+    <div className="max-w-270 mx-auto px-6 pt-7">
+      {<FeaturedHero post={posts[0]} />}
 
       <div className="grid grid-cols-[2fr_1fr] gap-6 max-[760px]:grid-cols-1">
         <div>
@@ -52,15 +34,15 @@ export function HomePage() {
             >
               All
             </button>
-            {/* <select className="bg-surface border border-border rounded-xl py-1.75 px-2" value={filter} onChange={(e) => setFilter(e.target.value)}>
+            <select className="bg-surface border border-border rounded-xl py-1.75 px-2" value={filter} onChange={(e) => setFilter(e.target.value)}>
               {categories.map((c) => (
-                <option key={c.id} value={c.name}>
+                <option key={c.name} value={c.name}>
                   {c.name}
                 </option>
               ))}
-            </select> */}
+            </select>
           </div>
-          <PostGrid posts={others} emptyMessage="No posts in this category yet." />
+          <PostGrid posts={posts} emptyMessage="No posts in this category yet." />
         </div>
 
         <div>
@@ -69,19 +51,17 @@ export function HomePage() {
             Popular authors
           </div>
           <Card className="mb-5">
-            {topAuthors.map(([id, views]) => {
-              const author = getUserById(id);
-              if (!author) return null;
+            {topAuthors.map(({ id, display_name }) => {
               return (
                 <Link
                   key={id}
                   to={`/profile/${id}`}
                   className="flex items-center gap-3.5 py-3.25 border-b border-border last:border-b-0"
                 >
-                  <Avatar user={author} size={32} />
+                  {display_name && <Avatar user={display_name} size={32} />}
                   <div>
-                    <div className="font-display font-bold">{author.name}</div>
-                    <div className="text-[12.5px] text-ink-soft">{views} total views</div>
+                    <div className="font-display font-bold">{display_name}</div>
+                    {/* <div className="text-[12.5px] text-ink-soft">{views} total views</div> */}
                   </div>
                 </Link>
               );
@@ -93,7 +73,6 @@ export function HomePage() {
           </div>
           <Card className="flex flex-wrap gap-2">
             {categories.map((c) => {
-              const count = posts.filter((p) => p.category === c.name && p.status === 'published').length;
               const Icon = getCategoryIcon(c.icon);
               return (
                 <button
@@ -102,7 +81,7 @@ export function HomePage() {
                   className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-display font-semibold bg-surface-tint text-ink"
                 >
                   <Icon size={13} strokeWidth={1.75} className="text-coral" />
-                  {c.name} · {count}
+                  {c.name}
                 </button>
               );
             })}

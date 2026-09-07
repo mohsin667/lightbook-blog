@@ -1,49 +1,43 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Clock, Eye, Flag, MessageCircle, Star } from 'lucide-react';
+import { ArrowLeft, Clock, Eye, Flag, MessageCircle } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Avatar } from '../components/ui/Avatar';
 import { CategoryBadge } from '../components/post/CategoryBadge';
 import { StatusBadge } from '../components/post/StatusBadge';
 import { PostContent } from '../components/post/PostContent';
 import { LikeButton } from '../components/post/LikeButton';
-import { CommentList } from '../components/post/CommentList';
-import { CommentForm } from '../components/post/CommentForm';
-import { PostGrid } from '../components/post/PostGrid';
+// import { CommentList } from '../components/post/CommentList';
+// import { CommentForm } from '../components/post/CommentForm';
+// import { PostGrid } from '../components/post/PostGrid';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
-import { incrementViews, toggleLike, addComment, reportPost } from '../features/posts/postsSlice';
+import { toggleLike, reportPost } from '../features/posts/postsSlice';
 import { showToast } from '../features/toast/toastSlice';
-import { CURRENT_USER_ID, getUserById, readTime, timeAgo } from '../data/mockData';
+import { readTime, timeAgo } from '../data/mockData';
 import { getPost } from '../features/posts/createPostThunk';
 
 export function PostPage() {
 
   const { id = '' } = useParams();
   const dispatch = useAppDispatch();
-  const posts = useAppSelector((s) => s.posts.list);
   const post = useAppSelector((s) => s.posts.current);
-  const currentUserName = useAppSelector(
-    (s) => s.users.list.find((u) => u.id === CURRENT_USER_ID)?.name ?? '',
-  );
   console.log(post, "post in postpage")
   useEffect(() => {
-    dispatch(getPost(id))
+    dispatch(getPost({ id }))
   }, [])
 
   if (!post) {
     return (
-      <div className="max-w-[760px] mx-auto px-6 pt-7">
+      <div className="max-w-190 mx-auto px-6 pt-7">
         <p>Post not found.</p>
       </div>
     );
   }
 
-  const author = getUserById(post.authorId);
-  const related = posts.filter((p) => p.category === post?.category && p.id !== post?.id && p.status === 'published').slice(0, 2);
   const liked = false;
 
   return (
-    <div className="max-w-[760px] mx-auto px-6 pt-7">
+    <div className="max-w-190 mx-auto px-6 pt-7">
       <Link to="/" className="inline-flex items-center gap-1.5 mb-4.5 text-sm text-ink-soft hover:text-ink">
         <ArrowLeft size={15} strokeWidth={1.75} />
         Back
@@ -56,12 +50,12 @@ export function PostPage() {
 
       <h1 className="text-[30px] font-display font-bold mt-3.5 mb-2.5">{post.title}</h1>
 
-      {author && (
+      {post.author_name && (
         <div className="flex items-center gap-2 text-sm text-ink-soft mb-5.5 flex-wrap">
-          <Avatar user={author} size={28} />
-          <Link to={`/profile/${author.id}`} className="font-display font-bold text-ink">
-            {author.name}
-          </Link>
+          <Avatar user={post.author_name} size={28} />
+          <div className="font-display font-bold text-ink">
+            {post.author_name}
+          </div>
           <span className="opacity-50">·</span>
           <Clock size={13} strokeWidth={1.75} />
           <span>{readTime(post.content)}</span>
@@ -69,7 +63,7 @@ export function PostPage() {
           <Eye size={13} strokeWidth={1.75} />
           <span>{post.views} views</span>
           <span className="opacity-50">·</span>
-          <span>{timeAgo(post.createdAt)}</span>
+          <span>{timeAgo(post.updated_at)}</span>
         </div>
       )}
 
@@ -106,16 +100,16 @@ export function PostPage() {
         }}
       /> */}
 
-      {related.length > 0 && (
+      {/* {related.length > 0 && (
         <>
           <hr className="border-border my-6" />
           <div className="flex items-center gap-2 text-lg font-display font-bold mb-3.5">
             <Star size={18} strokeWidth={1.75} />
-            More in {post?.category}
+            More in {post?.category_name}
           </div>
           <PostGrid posts={related} />
         </>
-      )}
+      )} */}
     </div>
   );
 }

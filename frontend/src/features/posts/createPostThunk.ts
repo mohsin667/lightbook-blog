@@ -32,8 +32,8 @@ export const getAllPosts = createAsyncThunk('post/getAll', async (_,{rejectWithV
     const result = await res.json();
     return result;
 })
-export const getPost = createAsyncThunk('post/getPost', async (id,{rejectWithValue}) => {
-    const res = await refreshAPI(`/api/posts/${id}`);
+export const getPost = createAsyncThunk('post/getPost', async (id:{id: string},{rejectWithValue}) => {
+    const res = await refreshAPI(`/api/posts/${id.id}`);
     if(!res.ok) {
         return rejectWithValue((await res.json()).detail);
     }

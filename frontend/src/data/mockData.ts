@@ -9,14 +9,15 @@ export interface Post {
   slug: string;
   title: string;
   excerpt: string;
-  content: string; // markdown-ish: blank-line paragraphs, ```lang fenced code blocks, `inline code`
+  content: string;
   category_id: string;
   category_name?: string;
   authorId: string;
   author_name: string;
   cover_image_url: string;
   status: 'published' | 'draft' | 'flagged';
-  createdAt: number; // epoch ms
+  createdAt: number;
+  updated_at: number;
   views: number;
   likes: number;
   flagCount: number;
@@ -31,6 +32,7 @@ export interface User {
   role: 'user' | 'admin';
   status: 'active' | 'restricted';
   joinedAt: string; // 'YYYY-MM-DD'
+  display_name?: string;
 }
 
 export interface Category {
@@ -101,7 +103,7 @@ I spent four days deliberately taking the wrong turn on every street, and it wor
 The trams are slow, loud, and absolutely worth riding just for the sake of it. Tram 28 is the famous one, but the smaller, quieter routes through Graça felt more honest.
 
 Eat the pastel de nata warm. Not lukewarm. Warm, straight from the tray, with cinnamon dusted on top before you even sit down.`,
-    category: 'Travel',
+    category_name: 'Travel',
     authorId: 'u2',
     image: 'https://picsum.photos/seed/lisbon-travel/900/600',
     status: 'published',
@@ -122,7 +124,7 @@ Cavatelli are the most forgiving place to start — just a thumb and a rolled ro
 Tagliatelle is where a pasta machine starts to earn its keep, though a rolling pin and patience will get you there too.
 
 The two that separate the curious from the committed are garganelli and, honestly, a properly laminated lasagna sheet. Both take an afternoon. Both are worth it exactly once a season.`,
-    category: 'Food',
+    category_name: 'Food',
     authorId: 'u3',
     image: 'https://picsum.photos/seed/pasta-food/900/600',
     status: 'published',
