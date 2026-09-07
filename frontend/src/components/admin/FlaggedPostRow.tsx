@@ -3,30 +3,30 @@ import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { CategoryBadge } from '../post/CategoryBadge';
-import { getUserById, type Post } from '../../data/mockData';
+import type { ReportedPost } from '../../types';
 
 export interface FlaggedPostRowProps {
-  post: Post;
-  onDismiss: (id: string) => void;
-  onUnpublish: (id: string) => void;
+  reported: ReportedPost;
+  onDismiss: (postId: string) => void;
+  onUnpublish: (postId: string) => void;
 }
 
-export function FlaggedPostRow({ post, onDismiss, onUnpublish }: FlaggedPostRowProps) {
-  const author = getUserById(post.authorId);
+export function FlaggedPostRow({ reported, onDismiss, onUnpublish }: FlaggedPostRowProps) {
+  const { post, report_count } = reported;
   return (
     <Card className="mb-3">
       <div className="flex justify-between items-start gap-3.5">
         <div className="flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <CategoryBadge category={post.category} />
+            <CategoryBadge category_name={post.category_name} />
             <Badge variant="danger">
               <Flag size={12} strokeWidth={1.75} />
-              {post.flagCount} report{post.flagCount === 1 ? '' : 's'}
+              {report_count} report{report_count === 1 ? '' : 's'}
             </Badge>
           </div>
           <div className="font-display font-bold mt-1.5">{post.title}</div>
           <div className="text-[13px] text-ink-soft">
-            by {author?.name} · {post.excerpt}
+            by {post.author_name} · {post.excerpt}
           </div>
         </div>
         <div className="flex gap-2 flex-shrink-0">

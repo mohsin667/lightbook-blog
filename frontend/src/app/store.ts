@@ -4,6 +4,7 @@ import usersReducer from '../features/users/usersSlice';
 import categoriesReducer from '../features/categories/categoriesSlice';
 import toastReducer from '../features/toast/toastSlice';
 import authReducer from '../features/auth/authSlice'
+import commentsReducer from '../features/comments/commentsSlice';
 
 export const store = configureStore({
   reducer: {
@@ -11,7 +12,8 @@ export const store = configureStore({
     users: usersReducer,
     categories: categoriesReducer,
     toast: toastReducer,
-    auth: authReducer
+    auth: authReducer,
+    comments: commentsReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

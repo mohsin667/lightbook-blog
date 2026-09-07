@@ -1,5 +1,6 @@
 import {createSlice} from "@reduxjs/toolkit"
-import {checkAuth,  registerUser, logoutUser, loginUser} from './checkAuthSlice'
+import {checkAuth,  registerUser, logoutUser, loginUser, updateProfile} from './checkAuthSlice'
+import type { User } from '../../types'
 // import { createAsyncThunk } from "@reduxjs/toolkit"
 
 // export const loginUser = createAsyncThunk('auth/login', async (credentials:{email: string, password: string}, {rejectWithValue})=> {
@@ -15,17 +16,6 @@ import {checkAuth,  registerUser, logoutUser, loginUser} from './checkAuthSlice'
 //     const result = await res.json()
 //     return result;
 // })
-
-interface User {
-    id: string,
-    username: string,
-    email: string,
-    display_name: string,
-    bio: string | null,
-    avatar_url: string | null,
-    role: 'user' | 'admin',
-    created_at: string
-}
 
 interface AuthState {
     user: User | null,
@@ -84,6 +74,18 @@ const authSlice = createSlice({
         .addCase(logoutUser.fulfilled, (state) => {
             state.user = null
             state.status = 'succeeded'
+        })
+        .addCase(updateProfile.pending, (state) => {
+            state.status = 'loading'
+            state.error = null
+        })
+        .addCase(updateProfile.fulfilled, (state, action) => {
+            state.status = 'succeeded'
+            state.user = action.payload
+        })
+        .addCase(updateProfile.rejected, (state, action) => {
+            state.status = 'failed'
+            state.error = action.payload as string
         })
     }
 })

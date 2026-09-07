@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ShieldCheck, Star, Trash2, Check, X, Lock, Plus, BarChart3, Users } from 'lucide-react';
 import { AdminTabs, type AdminTabId } from '../components/admin/AdminTabs';
 import { UserRow } from '../components/admin/UserRow';
@@ -13,10 +13,9 @@ import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Avatar } from '../components/ui/Avatar';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
-import { getUserById } from '../data/mockData';
 import { showToast } from '../features/toast/toastSlice';
-import { dismissFlag, unpublishPost, setFeatured } from '../features/posts/postsSlice';
-import { toggleRestrictUser, deleteUser } from '../features/users/usersSlice';
+import { dismissFlag, unpublishPost, setFeatured, getReportedPosts } from '../features/posts/createPostThunk';
+import { toggleRestrictUser, deleteUser, getAllUsers } from '../features/users/usersSlice';
 import { addCategory, deleteCategory } from '../features/categories/categoriesSlice';
 
 export function AdminPage() {
@@ -25,7 +24,13 @@ export function AdminPage() {
   const posts = useAppSelector((s) => s.posts.list);
   const users = useAppSelector((s) => s.users.list);
   const categories = useAppSelector((s) => s.categories.list);
+  const reported = useAppSelector((s) => s.posts.reported);
   const featuredId = useAppSelector((s) => s.posts.featuredId);
+
+  useEffect(() => {
+    dispatch(getAllUsers());
+    dispatch(getReportedPosts());
+  }, [dispatch]);
 
   return (
     <div className="max-w-[1080px] mx-auto px-6 pt-7">
@@ -43,14 +48,18 @@ export function AdminPage() {
             <UserRow
               key={u.id}
               user={u}
-              postCount={posts.filter((p) => p.authorId === u.id).length}
-              onToggleRestrict={(id) => {
-                dispatch(toggleRestrictUser(id));
-                dispatch(showToast('User status updated', Lock));
+              postCount={posts.filter((p) => p.author_id === u.id).length}
+              onToggleRestrict={async (id) => {
+                const result = await dispatch(toggleRestrictUser({ id, banned: !u.is_banned }));
+                dispatch(toggleRestrictUser.rejected.match(result)
+                  ? showToast((result.payload as string) ?? 'Could not update user')
+                  : showToast(u.is_banned ? 'User unrestricted' : 'User restricted', Lock));
               }}
-              onDelete={(id) => {
-                dispatch(deleteUser(id));
-                dispatch(showToast('User deleted', Trash2));
+              onDelete={async (id) => {
+                const result = await dispatch(deleteUser(id));
+                dispatch(deleteUser.rejected.match(result)
+                  ? showToast((result.payload as string) ?? 'Could not delete user')
+                  : showToast('User deleted', Trash2));
               }}
             />
           ))}
@@ -58,23 +67,21 @@ export function AdminPage() {
       )}
       {tab === 'moderation' && (
         <>
-          {posts.filter((p) => p.status === 'flagged').length ? (
-            posts
-              .filter((p) => p.status === 'flagged')
-              .map((p) => (
-                <FlaggedPostRow
-                  key={p.id}
-                  post={p}
-                  onDismiss={(id) => {
-                    dispatch(dismissFlag(id));
-                    dispatch(showToast('Flag dismissed', Check));
-                  }}
-                  onUnpublish={(id) => {
-                    dispatch(unpublishPost(id));
-                    dispatch(showToast('Post unpublished', X));
-                  }}
-                />
-              ))
+          {reported.length ? (
+            reported.map((r) => (
+              <FlaggedPostRow
+                key={r.post.id}
+                reported={r}
+                onDismiss={(postId) => {
+                  dispatch(dismissFlag(postId));
+                  dispatch(showToast('Flag dismissed', Check));
+                }}
+                onUnpublish={(postId) => {
+                  dispatch(unpublishPost(postId));
+                  dispatch(showToast('Post unpublished', X));
+                }}
+              />
+            ))
           ) : (
             <EmptyState icon={Check}>No flagged posts. All clear.</EmptyState>
           )}
@@ -88,23 +95,25 @@ export function AdminPage() {
             <Card className="mb-4">
               {categories.map((c) => (
                 <CategoryRow
-                  key={c.name}
+                  key={c.id}
                   category={c}
-                  inUse={posts.some((p) => p.category === c.name)}
-                  onDelete={(name) => {
-                    dispatch(deleteCategory(name));
-                    dispatch(showToast('Category removed', Trash2));
+                  inUse={posts.some((p) => p.category_id === c.id)}
+                  onDelete={async (id) => {
+                    const result = await dispatch(deleteCategory(id));
+                    dispatch(deleteCategory.rejected.match(result)
+                      ? showToast((result.payload as string) ?? 'Could not remove category')
+                      : showToast('Category removed', Trash2));
                   }}
                 />
               ))}
             </Card>
-            <AddCategoryForm onAdd={(name) => dispatch(addCategory(name))} />
+            <AddCategoryForm />
           </div>
           <div>
             <div className="text-lg font-display font-bold mb-3.5">Featured post</div>
             <Card>
               <FeaturedPostSelect
-                posts={posts.filter((p) => p.status === 'published')}
+                posts={posts}
                 featuredId={featuredId}
                 onChange={(id) => {
                   dispatch(setFeatured(id));
@@ -123,16 +132,16 @@ function OverviewTab() {
   const posts = useAppSelector((s) => s.posts.list);
   const users = useAppSelector((s) => s.users.list);
   const categories = useAppSelector((s) => s.categories.list);
+  const reported = useAppSelector((s) => s.posts.reported);
   const totalUsers = users.length;
   const totalPosts = posts.length;
   const publishedToday = posts.filter(
-    (p) => p.status === 'published' && Date.now() - p.createdAt < 86400000,
+    (p) => p.published_at && Date.now() - new Date(p.published_at).getTime() < 86400000,
   ).length;
-  const flagged = posts.filter((p) => p.status === 'flagged').length;
 
   const byCategory = categories.map((c) => ({
     name: c.name,
-    count: posts.filter((p) => p.category === c.name).length,
+    count: posts.filter((p) => p.category_id === c.id).length,
   }));
   const maxCount = Math.max(1, ...byCategory.map((c) => c.count));
 
@@ -142,7 +151,7 @@ function OverviewTab() {
         <StatCard label="Total users" value={totalUsers} />
         <StatCard label="Total posts" value={totalPosts} />
         <StatCard label="Published today" value={publishedToday} />
-        <StatCard label="Flagged, pending" value={flagged} />
+        <StatCard label="Flagged, pending" value={reported.length} />
       </div>
       <div className="flex items-center gap-2 text-lg font-display font-bold mb-3.5">
         <BarChart3 size={18} strokeWidth={1.75} />
@@ -159,18 +168,8 @@ function OverviewTab() {
 
 function AnalyticsTab() {
   const posts = useAppSelector((s) => s.posts.list);
-  const published = posts.filter((p) => p.status === 'published');
-  const topPosts = [...published].sort((a, b) => b.views - a.views).slice(0, 5);
-
-  const authorStats: Record<string, { views: number; likes: number }> = {};
-  published.forEach((p) => {
-    authorStats[p.authorId] = authorStats[p.authorId] || { views: 0, likes: 0 };
-    authorStats[p.authorId].views += p.views;
-    authorStats[p.authorId].likes += p.likes;
-  });
-  const topAuthors = Object.entries(authorStats)
-    .sort((a, b) => b[1].views - a[1].views)
-    .slice(0, 5);
+  const topAuthors = useAppSelector((s) => s.users.topAuthors);
+  const topPosts = [...posts].sort((a, b) => b.view_count - a.view_count).slice(0, 5);
 
   return (
     <div className="grid grid-cols-[2fr_1fr] gap-6 max-[760px]:grid-cols-1">
@@ -186,7 +185,7 @@ function AnalyticsTab() {
               <div className="flex-1">
                 <div className="font-display font-bold">{p.title}</div>
                 <div className="text-[12.5px] text-ink-soft">
-                  {p.views} views · {p.likes} likes
+                  {p.view_count} views · {p.like_count} likes
                 </div>
               </div>
             </div>
@@ -199,35 +198,33 @@ function AnalyticsTab() {
           Top authors
         </div>
         <Card padded={false}>
-          {topAuthors.map(([id, s]) => {
-            const author = getUserById(id);
-            if (!author) return null;
-            return (
-              <div key={id} className="flex items-center gap-3.5 py-3.25 px-4.5 border-b border-border last:border-b-0">
-                <Avatar user={author} size={28} />
-                <div className="flex-1">
-                  <div className="font-display font-bold">{author.name}</div>
-                  <div className="text-[12.5px] text-ink-soft">
-                    {s.views} views · {s.likes} likes
-                  </div>
-                </div>
+          {topAuthors.map((author) => (
+            <div key={author.id} className="flex items-center gap-3.5 py-3.25 px-4.5 border-b border-border last:border-b-0">
+              <Avatar user={author.display_name} size={28} />
+              <div className="flex-1">
+                <div className="font-display font-bold">{author.display_name}</div>
+                <div className="text-[12.5px] text-ink-soft">{author.total_likes} likes</div>
               </div>
-            );
-          })}
+            </div>
+          ))}
         </Card>
       </div>
     </div>
   );
 }
 
-function AddCategoryForm({ onAdd }: { onAdd: (name: string) => void }) {
+function AddCategoryForm() {
   const [name, setName] = useState('');
   const dispatch = useAppDispatch();
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    onAdd(trimmed);
+    const result = await dispatch(addCategory(trimmed));
+    if (addCategory.rejected.match(result)) {
+      dispatch(showToast((result.payload as string) ?? 'Could not add category'));
+      return;
+    }
     dispatch(showToast('Category added', Check));
     setName('');
   };

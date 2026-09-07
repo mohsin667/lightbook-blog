@@ -1,22 +1,41 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FileText, PenLine, Tag, Users } from 'lucide-react';
+import { FileText, Heart, PenLine, Tag, Users } from 'lucide-react';
 import { FeaturedHero } from '../components/post/FeaturedHero';
 import { PostGrid } from '../components/post/PostGrid';
-import { getCategoryIcon } from '../components/post/CategoryBadge';
+import { getIconForCategoryName } from '../components/post/CategoryBadge';
 import { Card } from '../components/ui/Card';
 import { Avatar } from '../components/ui/Avatar';
-import { useAppSelector } from '../app/hooks';
+import { useAppDispatch, useAppSelector } from '../app/hooks';
+import { getAllPosts } from '../features/posts/createPostThunk';
+import { Button } from '../components/ui/Button';
+
+const ALL = 'All';
 
 export function HomePage() {
+  const dispatch = useAppDispatch();
   const posts = useAppSelector((s) => s.posts.list);
+  const hasMore = useAppSelector((s) => s.posts.hasMore);
+  const loadedCount = useAppSelector((s) => s.posts.loadedCount);
+  const status = useAppSelector((s) => s.posts.status);
+  const featuredId = useAppSelector((s) => s.posts.featuredId);
   const categories = useAppSelector((s) => s.categories.list);
-  const topAuthors = useAppSelector((s) => s.users.list);
-  const [filter, setFilter] = useState('All');
+  const topAuthors = useAppSelector((s) => s.users.topAuthors);
+  const [filter, setFilter] = useState(ALL);
+
+  const featured = useMemo(
+    () => posts.find((p) => p.id === featuredId) ?? posts[0],
+    [posts, featuredId],
+  );
+
+  const visible = useMemo(
+    () => (filter === ALL ? posts : posts.filter((p) => p.category_name === filter)),
+    [posts, filter],
+  );
 
   return (
     <div className="max-w-270 mx-auto px-6 pt-7">
-      {<FeaturedHero post={posts[0]} />}
+      {featured && <FeaturedHero post={featured} />}
 
       <div className="grid grid-cols-[2fr_1fr] gap-6 max-[760px]:grid-cols-1">
         <div>
@@ -26,23 +45,42 @@ export function HomePage() {
           </div>
           <div className="flex gap-2 flex-wrap mb-4.5">
             <button
-              onClick={() => setFilter('All')}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-display font-semibold border ${filter === 'All'
+              onClick={() => setFilter(ALL)}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-display font-semibold border ${filter === ALL
                 ? 'border-coral bg-coral-light text-ink'
                 : 'border-transparent bg-surface-tint text-ink'
                 }`}
             >
               All
             </button>
-            <select className="bg-surface border border-border rounded-xl py-1.75 px-2" value={filter} onChange={(e) => setFilter(e.target.value)}>
-              {categories.map((c) => (
-                <option key={c.name} value={c.name}>
+            {categories.map((c) => {
+              const Icon = getIconForCategoryName(c.name);
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => setFilter(c.name)}
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-display font-semibold border ${filter === c.name
+                    ? 'border-coral bg-coral-light text-ink'
+                    : 'border-transparent bg-surface-tint text-ink'
+                    }`}
+                >
+                  <Icon size={13} strokeWidth={1.75} className="text-coral" />
                   {c.name}
-                </option>
-              ))}
-            </select>
+                </button>
+              );
+            })}
           </div>
-          <PostGrid posts={posts} emptyMessage="No posts in this category yet." />
+          <PostGrid posts={visible} emptyMessage="No posts in this category yet." />
+          {hasMore && filter === ALL && (
+            <div className="flex justify-center mt-5">
+              <Button
+                disabled={status === 'loading'}
+                onClick={() => dispatch(getAllPosts({ skip: loadedCount }))}
+              >
+                {status === 'loading' ? 'Loading…' : 'Load more'}
+              </Button>
+            </div>
+          )}
         </div>
 
         <div>
@@ -51,21 +89,26 @@ export function HomePage() {
             Popular authors
           </div>
           <Card className="mb-5">
-            {topAuthors.map(({ id, display_name }) => {
-              return (
+            {topAuthors.length ? (
+              topAuthors.map((author) => (
                 <Link
-                  key={id}
-                  to={`/profile/${id}`}
+                  key={author.id}
+                  to={`/profile/${author.id}`}
                   className="flex items-center gap-3.5 py-3.25 border-b border-border last:border-b-0"
                 >
-                  {display_name && <Avatar user={display_name} size={32} />}
+                  <Avatar user={author.display_name} size={32} />
                   <div>
-                    <div className="font-display font-bold">{display_name}</div>
-                    {/* <div className="text-[12.5px] text-ink-soft">{views} total views</div> */}
+                    <div className="font-display font-bold">{author.display_name}</div>
+                    <div className="flex items-center gap-1 text-[12.5px] text-ink-soft">
+                      <Heart size={12} strokeWidth={1.75} />
+                      {author.total_likes} total likes
+                    </div>
                   </div>
                 </Link>
-              );
-            })}
+              ))
+            ) : (
+              <p className="text-ink-soft text-sm m-0">No authors yet.</p>
+            )}
           </Card>
           <div className="flex items-center gap-2 text-lg font-display font-bold mb-3.5">
             <Tag size={18} strokeWidth={1.75} />
@@ -73,10 +116,10 @@ export function HomePage() {
           </div>
           <Card className="flex flex-wrap gap-2">
             {categories.map((c) => {
-              const Icon = getCategoryIcon(c.icon);
+              const Icon = getIconForCategoryName(c.name);
               return (
                 <button
-                  key={c.name}
+                  key={c.id}
                   onClick={() => setFilter(c.name)}
                   className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-display font-semibold bg-surface-tint text-ink"
                 >

@@ -1,25 +1,35 @@
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { BarChart3, Eye, FileText, Heart, PenLine } from 'lucide-react';
+import { BarChart3, Bookmark, Eye, FileText, Heart, PenLine } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { StatCard } from '../components/ui/StatCard';
 import { EmptyState } from '../components/ui/EmptyState';
 import { CategoryBadge } from '../components/post/CategoryBadge';
-import { useAppSelector } from '../app/hooks';
-import { CURRENT_USER_ID, currentUser, timeAgo } from '../data/mockData';
+import { useAppDispatch, useAppSelector } from '../app/hooks';
+import { getDrafts, getBookmarks } from '../features/posts/createPostThunk';
+import { PostGrid } from '../components/post/PostGrid';
+import { timeAgo } from '../utils/format';
 
 export function DashboardPage() {
+  const dispatch = useAppDispatch();
   const posts = useAppSelector((s) => s.posts.list);
-  const user = currentUser();
-  const mine = posts.filter((p) => p.authorId === CURRENT_USER_ID);
-  const published = mine.filter((p) => p.status === 'published' || p.status === 'flagged');
-  const drafts = mine.filter((p) => p.status === 'draft');
-  const totalViews = published.reduce((s, p) => s + p.views, 0);
-  const totalLikes = published.reduce((s, p) => s + p.likes, 0);
+  const drafts = useAppSelector((s) => s.posts.drafts);
+  const bookmarks = useAppSelector((s) => s.posts.bookmarks);
+  const user = useAppSelector((s) => s.auth.user);
+
+  useEffect(() => {
+    dispatch(getDrafts());
+    dispatch(getBookmarks());
+  }, [dispatch]);
+
+  const published = posts.filter((p) => p.author_id === user?.id);
+  const totalViews = published.reduce((sum, p) => sum + p.view_count, 0);
+  const totalLikes = published.reduce((sum, p) => sum + p.like_count, 0);
 
   return (
     <div className="max-w-[1080px] mx-auto px-6 pt-7">
-      <h1 className="text-2xl font-display font-bold mb-1">Hi, {user.name}</h1>
+      <h1 className="text-2xl font-display font-bold mb-1">Hi, {user?.display_name}</h1>
       <p className="text-ink-soft mb-5.5">Here's what's happening with your writing.</p>
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-4 mb-6.5">
@@ -40,7 +50,7 @@ export function DashboardPage() {
               <div key={p.id} className="flex items-center gap-3.5 py-3.25 border-b border-border last:border-b-0">
                 <div className="flex-1">
                   <div className="font-display font-bold">{p.title}</div>
-                  <div className="text-[12.5px] text-ink-soft">Last edited {timeAgo(p.createdAt)}</div>
+                  <div className="text-[12.5px] text-ink-soft">Last edited {timeAgo(p.updated_at)}</div>
                 </div>
                 <Link to={`/write/${p.id}`}>
                   <Button size="sm">
@@ -63,14 +73,14 @@ export function DashboardPage() {
           published.map((p) => (
             <div key={p.id} className="flex items-center gap-3.5 py-3.25 border-b border-border last:border-b-0">
               <div className="flex-1">
-                <CategoryBadge category={p.category} />
+                <CategoryBadge category_name={p.category_name} />
                 <div className="font-display font-bold mt-1">{p.title}</div>
                 <div className="flex items-center gap-1.5 text-[12.5px] text-ink-soft">
-                  <Eye size={12} strokeWidth={1.75} /> {p.views}
+                  <Eye size={12} strokeWidth={1.75} /> {p.view_count}
                   <span>·</span>
-                  <Heart size={12} strokeWidth={1.75} /> {p.likes}
+                  <Heart size={12} strokeWidth={1.75} /> {p.like_count}
                   <span>·</span>
-                  {timeAgo(p.createdAt)}
+                  {timeAgo(p.published_at ?? p.created_at)}
                 </div>
               </div>
               <Link to={`/write/${p.id}`}>
@@ -85,6 +95,14 @@ export function DashboardPage() {
           <EmptyState icon={FileText}>Nothing published yet — your first post is one click away.</EmptyState>
         )}
       </Card>
+
+      <div className="flex items-center gap-2 text-lg font-display font-bold mb-3.5">
+        <Bookmark size={18} strokeWidth={1.75} />
+        Saved posts
+      </div>
+      <div className="mb-6.5">
+        <PostGrid posts={bookmarks} emptyMessage="Nothing saved yet." />
+      </div>
 
       <Link to="/write">
         <Button variant="primary">

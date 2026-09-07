@@ -1,30 +1,39 @@
 import { useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Clock, Eye, Flag, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Bookmark, Clock, Eye, Flag, MessageCircle, Trash2 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Avatar } from '../components/ui/Avatar';
 import { CategoryBadge } from '../components/post/CategoryBadge';
 import { StatusBadge } from '../components/post/StatusBadge';
 import { PostContent } from '../components/post/PostContent';
 import { LikeButton } from '../components/post/LikeButton';
-// import { CommentList } from '../components/post/CommentList';
-// import { CommentForm } from '../components/post/CommentForm';
-// import { PostGrid } from '../components/post/PostGrid';
+import { CommentList } from '../components/post/CommentList';
+import { CommentForm } from '../components/post/CommentForm';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
-import { toggleLike, reportPost } from '../features/posts/postsSlice';
 import { showToast } from '../features/toast/toastSlice';
-import { readTime, timeAgo } from '../data/mockData';
-import { getPost } from '../features/posts/createPostThunk';
+import { formatReadTime, timeAgo } from '../utils/format';
+import { getPost, toggleLike, reportPost, toggleBookmark } from '../features/posts/createPostThunk';
+import { fetchComments, addComment, deleteComment, clearComments } from '../features/comments/commentsSlice';
 
 export function PostPage() {
-
   const { id = '' } = useParams();
   const dispatch = useAppDispatch();
   const post = useAppSelector((s) => s.posts.current);
-  console.log(post, "post in postpage")
+  const comments = useAppSelector((s) => s.comments.list);
+  const authUser = useAppSelector((s) => s.auth.user);
+  const postId = post?.id;
+
   useEffect(() => {
-    dispatch(getPost({ id }))
-  }, [])
+    dispatch(getPost({ id }));
+    return () => {
+      dispatch(clearComments());
+    };
+  }, [dispatch, id]);
+
+  // comments are keyed off the post's id, which is only known once it loads
+  useEffect(() => {
+    if (postId) dispatch(fetchComments({ postId }));
+  }, [dispatch, postId]);
 
   if (!post) {
     return (
@@ -33,8 +42,6 @@ export function PostPage() {
       </div>
     );
   }
-
-  const liked = false;
 
   return (
     <div className="max-w-190 mx-auto px-6 pt-7">
@@ -50,35 +57,57 @@ export function PostPage() {
 
       <h1 className="text-[30px] font-display font-bold mt-3.5 mb-2.5">{post.title}</h1>
 
-      {post.author_name && (
-        <div className="flex items-center gap-2 text-sm text-ink-soft mb-5.5 flex-wrap">
-          <Avatar user={post.author_name} size={28} />
-          <div className="font-display font-bold text-ink">
-            {post.author_name}
-          </div>
-          <span className="opacity-50">·</span>
-          <Clock size={13} strokeWidth={1.75} />
-          <span>{readTime(post.content)}</span>
-          <span className="opacity-50">·</span>
-          <Eye size={13} strokeWidth={1.75} />
-          <span>{post.views} views</span>
-          <span className="opacity-50">·</span>
-          <span>{timeAgo(post.updated_at)}</span>
+      <div className="flex items-center gap-2 text-sm text-ink-soft mb-5.5 flex-wrap">
+        <Avatar user={post.author_name} size={28} />
+        <Link to={`/profile/${post.author_id}`} className="font-display font-bold text-ink">
+          {post.author_name}
+        </Link>
+        <span className="opacity-50">·</span>
+        <Clock size={13} strokeWidth={1.75} />
+        <span>{formatReadTime(post.read_time_minutes)}</span>
+        <span className="opacity-50">·</span>
+        <Eye size={13} strokeWidth={1.75} />
+        <span>{post.view_count} views</span>
+        <span className="opacity-50">·</span>
+        <span>{timeAgo(post.published_at ?? post.created_at)}</span>
+      </div>
+
+      {post.cover_image_url && (
+        <div className="w-full aspect-video rounded-xl overflow-hidden border border-border mb-6.5">
+          <img src={post.cover_image_url} alt="" className="w-full h-full object-cover block" />
         </div>
       )}
-
-      <div className="w-full aspect-video rounded-xl overflow-hidden border border-border mb-6.5">
-        <img src={post.cover_image_url} alt="" className="w-full h-full object-cover block" />
-      </div>
 
       <PostContent content={post.content} />
 
       <div className="flex gap-2.5 my-6.5">
-        <LikeButton liked={liked} count={post.likes} onToggle={() => dispatch(toggleLike(post.id))} />
+        <LikeButton
+          liked={post.liked_by_me}
+          count={post.like_count}
+          onToggle={() => dispatch(toggleLike({ postId: post.id, liked: post.liked_by_me }))}
+        />
+        {authUser && (
+          <Button
+            size="md"
+            variant={post.bookmarked_by_me ? 'primary' : 'default'}
+            onClick={() => {
+              dispatch(toggleBookmark({ postId: post.id, bookmarked: post.bookmarked_by_me }));
+              dispatch(showToast(
+                post.bookmarked_by_me ? 'Bookmark removed' : 'Bookmarked', Bookmark));
+            }}
+          >
+            <Bookmark
+              size={15}
+              strokeWidth={1.75}
+              fill={post.bookmarked_by_me ? 'currentColor' : 'none'}
+            />
+            {post.bookmarked_by_me ? 'Saved' : 'Save'}
+          </Button>
+        )}
         <Button
           size="md"
           onClick={() => {
-            dispatch(reportPost(post.id));
+            dispatch(reportPost({ postId: post.id }));
             dispatch(showToast('Reported for review', Flag));
           }}
         >
@@ -90,26 +119,29 @@ export function PostPage() {
       <hr className="border-border my-6" />
       <div className="flex items-center gap-2 text-lg font-display font-bold mb-3.5">
         <MessageCircle size={18} strokeWidth={1.75} />
-        Comments ({post?.comments?.length})
+        Comments ({comments.length})
       </div>
-      {/* <CommentList comments={post?.comments} />
-      <CommentForm
-        onSubmit={(text) => {
-          dispatch(addComment({ postId: post.id, author: currentUserName, text }));
-          dispatch(showToast('Comment added', MessageCircle));
+      <CommentList
+        comments={comments}
+        currentUserId={authUser?.id}
+        isAdmin={authUser?.role === 'admin'}
+        onDelete={(commentId) => {
+          dispatch(deleteComment(commentId));
+          dispatch(showToast('Comment deleted', Trash2));
         }}
-      /> */}
-
-      {/* {related.length > 0 && (
-        <>
-          <hr className="border-border my-6" />
-          <div className="flex items-center gap-2 text-lg font-display font-bold mb-3.5">
-            <Star size={18} strokeWidth={1.75} />
-            More in {post?.category_name}
-          </div>
-          <PostGrid posts={related} />
-        </>
-      )} */}
+      />
+      {authUser ? (
+        <CommentForm
+          onSubmit={(text) => {
+            dispatch(addComment({ postId: post.id, content: text }));
+            dispatch(showToast('Comment added', MessageCircle));
+          }}
+        />
+      ) : (
+        <p className="text-ink-soft text-sm">
+          <Link to="/signin" className="text-coral">Sign in</Link> to leave a comment.
+        </p>
+      )}
     </div>
   );
 }

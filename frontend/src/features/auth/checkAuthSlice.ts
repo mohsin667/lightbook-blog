@@ -38,6 +38,24 @@ export const registerUser = createAsyncThunk(
   }
 )
 
+export const updateProfile = createAsyncThunk(
+  'auth/updateProfile',
+  async (
+    updates: { display_name?: string; bio?: string; avatar_url?: string },
+    { rejectWithValue }
+  ) => {
+    const res = await refreshAPI('/api/auth/me', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    })
+    if (!res.ok) {
+      return rejectWithValue((await res.json()).detail)
+    }
+    return res.json()
+  }
+)
+
 export const logoutUser = createAsyncThunk('auth/logout', async (_,{ rejectWithValue }) => {
     const res = await refreshAPI('/api/auth/logout',
         {

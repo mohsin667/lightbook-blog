@@ -24,6 +24,7 @@ class Post(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     published_at: Optional[datetime] = None
     cover_image_url: Optional[str] = None
+    is_featured: bool = Field(default=False, index=True)
 
 class Category(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
@@ -42,3 +43,22 @@ class PostTag(SQLModel, table=True):
 class PostLike(SQLModel, table=True):
     post_id: uuid.UUID = Field(foreign_key="post.id", primary_key=True)
     user_id: uuid.UUID = Field(foreign_key="user.id", primary_key=True)
+
+class Bookmark(SQLModel, table=True):
+    user_id: uuid.UUID = Field(foreign_key="user.id", primary_key=True)
+    post_id: uuid.UUID = Field(foreign_key="post.id", primary_key=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class Comment(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    post_id: uuid.UUID = Field(foreign_key="post.id", index=True)
+    author_id: uuid.UUID = Field(foreign_key="user.id", index=True)
+    content: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class PostReport(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    post_id: uuid.UUID = Field(foreign_key="post.id", index=True)
+    reporter_id: uuid.UUID = Field(foreign_key="user.id", index=True)
+    reason: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

@@ -3,8 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { BarChart3, Home, LogOut, PenLine, Search, ShieldCheck, ArrowLeftRight } from 'lucide-react';
 import { Avatar } from '../ui/Avatar';
 import { Button } from '../ui/Button';
-import { currentUser } from '../../data/mockData';
-import { useAppDispatch } from '../../app/hooks';
+import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { logoutUser } from '../../features/auth/checkAuthSlice';
 
 export interface NavbarProps {
@@ -19,7 +18,8 @@ export function Navbar({ isAuthenticated = true, role, onToggleRole }: NavbarPro
   const [query, setQuery] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
-  const user = currentUser();
+  const user = useAppSelector((s) => s.auth.user);
+  const isAdmin = user?.role === 'admin';
 
   const navLinkClass = (path: string) =>
     `flex items-center gap-1.5 px-3.5 py-2 rounded-lg font-display font-semibold text-sm transition-colors ${location.pathname === path ? 'bg-coral text-coral-deep' : 'text-ink-soft hover:bg-surface-tint hover:text-ink'
@@ -83,20 +83,22 @@ export function Navbar({ isAuthenticated = true, role, onToggleRole }: NavbarPro
             />
           </div>
 
-          {isAuthenticated ? (
+          {isAuthenticated && user ? (
             <>
-              <button
-                onClick={onToggleRole}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-[7px] font-display font-semibold text-[13px] border transition-colors ${role === 'admin'
-                  ? 'bg-coral text-coral-deep border-coral'
-                  : 'bg-surface-tint text-ink border-border'
-                  }`}
-              >
-                <ArrowLeftRight size={14} strokeWidth={1.75} />
-                {role === 'admin' ? 'Admin view' : 'Reading as you'}
-              </button>
-              <Link to={`/profile/${user.id}`} title={user.name}>
-                <Avatar user={user} size={34} />
+              {isAdmin && (
+                <button
+                  onClick={onToggleRole}
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-[7px] font-display font-semibold text-[13px] border transition-colors ${role === 'admin'
+                    ? 'bg-coral text-coral-deep border-coral'
+                    : 'bg-surface-tint text-ink border-border'
+                    }`}
+                >
+                  <ArrowLeftRight size={14} strokeWidth={1.75} />
+                  {role === 'admin' ? 'Admin view' : 'Reading as you'}
+                </button>
+              )}
+              <Link to={`/profile/${user.id}`} title={user.display_name}>
+                <Avatar user={user.display_name} size={34} />
               </Link>
               <Button size="sm" variant="ghost" onClick={handleLogout} title="Sign out">
                 <LogOut size={15} strokeWidth={1.75} />

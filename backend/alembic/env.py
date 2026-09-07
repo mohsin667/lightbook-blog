@@ -5,8 +5,10 @@ from alembic import context
 from sqlmodel import SQLModel
 
 from app.core.config import settings
-from app.models.user import User
-from app.models.post import Post, Category, Tag, PostTag, PostLike
+from app.models.user import User, Follow
+from app.models.post import (
+    Post, Category, Tag, PostTag, PostLike, Bookmark, Comment, PostReport,
+)
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)

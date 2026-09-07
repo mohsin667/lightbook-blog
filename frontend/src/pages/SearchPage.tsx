@@ -1,31 +1,25 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { PostGrid } from '../components/post/PostGrid';
 import { EmptyState } from '../components/ui/EmptyState';
-import { useAppSelector } from '../app/hooks';
-import { getUserById } from '../data/mockData';
+import { Button } from '../components/ui/Button';
+import { useAppDispatch, useAppSelector } from '../app/hooks';
+import { searchPosts } from '../features/posts/createPostThunk';
 
 export function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const posts = useAppSelector((s) => s.posts.list);
+  const dispatch = useAppDispatch();
+  const results = useAppSelector((s) => s.posts.searchResults);
+  const status = useAppSelector((s) => s.posts.searchStatus);
+  const hasMore = useAppSelector((s) => s.posts.searchHasMore);
   const query = searchParams.get('q') ?? '';
   const [input, setInput] = useState(query);
 
-  const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return [];
-    return posts.filter((p) => {
-      if (p.status !== 'published') return false;
-      const author = getUserById(p.authorId);
-      return (
-        p.title.toLowerCase().includes(q) ||
-        p.excerpt.toLowerCase().includes(q) ||
-        p.category.toLowerCase().includes(q) ||
-        author?.name.toLowerCase().includes(q)
-      );
-    });
-  }, [posts, query]);
+  useEffect(() => {
+    const q = query.trim();
+    if (q) dispatch(searchPosts({ q, skip: 0 }));
+  }, [dispatch, query]);
 
   const submit = () => setSearchParams(input.trim() ? { q: input.trim() } : {});
 
@@ -46,8 +40,19 @@ export function SearchPage() {
 
       {!query.trim() ? (
         <EmptyState icon={Search}>Type something and press enter.</EmptyState>
+      ) : status === 'loading' && !results.length ? (
+        <EmptyState icon={Search}>Searching…</EmptyState>
       ) : results.length ? (
-        <PostGrid posts={results} />
+        <>
+          <PostGrid posts={results} />
+          {hasMore && (
+            <div className="flex justify-center mt-5">
+              <Button onClick={() => dispatch(searchPosts({ q: query.trim(), skip: results.length }))}>
+                Load more
+              </Button>
+            </div>
+          )}
+        </>
       ) : (
         <EmptyState icon={Search}>No posts found for "{query}".</EmptyState>
       )}

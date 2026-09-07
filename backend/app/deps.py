@@ -1,11 +1,11 @@
 import uuid
 from datetime import datetime, timezone
 from fastapi import Depends, Cookie, HTTPException
-from app.models.user import User
+from app.models.user import User, Follow
 from app.core.security import decode_token
 from app.core.db import get_session
-from sqlmodel import Session, select
-from app.models.post import Post, PostType, Category, Tag, PostTag
+from sqlmodel import Session, select, func
+from app.models.post import Post, PostType, Category, Tag, PostTag, PostLike, Bookmark
 import re, secrets, math
 
 def get_current_user(access_token: str = Cookie(None),session: Session = Depends(get_session)) -> User: 
@@ -17,6 +17,8 @@ def get_current_user(access_token: str = Cookie(None),session: Session = Depends
     user = session.get(User, payload["sub"])
     if not user:
         raise HTTPException(status_code=401, detail="User not Found")
+    if user.is_banned:
+        raise HTTPException(status_code=403, detail="Your account has been restricted")
     return user
     
 
@@ -48,7 +50,9 @@ def get_current_user_optional(access_token: str = Cookie(None), session: Session
     payload = decode_token(access_token)
     if not payload or payload.get("type") != "access":
         return None
-    return session.get(User, payload["sub"])
+    user = session.get(User, payload["sub"])
+    # A restricted account reads the site as an anonymous visitor.
+    return None if (user and user.is_banned) else user
 
 def get_owned_post(post_id: uuid.UUID, current_user: User, session: Session) -> Post:
     post = session.get(Post, post_id)
@@ -123,7 +127,13 @@ def get_post_tags(post_id: uuid.UUID, session: Session) -> list[Tag]:
     statement = select(Tag).join(PostTag, PostTag.tag_id == Tag.id).where(PostTag.post_id == post_id)
     return session.exec(statement).all()
 
-def serialize_post(post: Post, session: Session) -> dict:
+def serialize_post(
+    post: Post,
+    session: Session,
+    current_user: User | None = None,
+    liked_ids: set[uuid.UUID] | None = None,
+    bookmarked_ids: set[uuid.UUID] | None = None,
+) -> dict:
     tags = get_post_tags(post.id, session)
     author = session.get(User, post.author_id)
     category = session.get(Category, post.category_id) if post.category_id else None
@@ -131,4 +141,59 @@ def serialize_post(post: Post, session: Session) -> dict:
     data["tags"] = [{"id": t.id, "name": t.name, "slug": t.slug} for t in tags]
     data["author_name"] = author.display_name if author else "Unknown"
     data["category_name"] = category.name if category else None
+
+    if not current_user:
+        data["liked_by_me"] = False
+        data["bookmarked_by_me"] = False
+        return data
+
+    # `liked_ids`/`bookmarked_ids` are prefetched by serialize_posts for list
+    # routes; fall back to a primary-key lookup for the single-post case.
+    if liked_ids is not None:
+        data["liked_by_me"] = post.id in liked_ids
+    else:
+        data["liked_by_me"] = session.get(
+            PostLike, {"post_id": post.id, "user_id": current_user.id}) is not None
+
+    if bookmarked_ids is not None:
+        data["bookmarked_by_me"] = post.id in bookmarked_ids
+    else:
+        data["bookmarked_by_me"] = session.get(
+            Bookmark, {"user_id": current_user.id, "post_id": post.id}) is not None
+
     return data
+
+def serialize_user_summary(
+    user: User, session: Session, current_user: User | None = None
+) -> dict:
+    followers = session.exec(
+        select(func.count()).select_from(Follow).where(Follow.followed_id == user.id)).one()
+    following = session.exec(
+        select(func.count()).select_from(Follow).where(Follow.follower_id == user.id)).one()
+    data = user.model_dump()
+    data["follower_count"] = followers
+    data["following_count"] = following
+    data["followed_by_me"] = bool(current_user) and session.get(
+        Follow, {"follower_id": current_user.id, "followed_id": user.id}) is not None
+    return data
+
+def serialize_comment(comment, session: Session) -> dict:
+    author = session.get(User, comment.author_id)
+    data = comment.model_dump()
+    data["author_name"] = author.display_name if author else "Unknown"
+    return data
+
+def serialize_posts(posts, session: Session, current_user: User | None = None) -> list[dict]:
+    """Serialize a list of posts, prefetching the viewer's likes/bookmarks in two queries."""
+    if not current_user:
+        return [serialize_post(p, session) for p in posts]
+
+    liked_ids = set(session.exec(
+        select(PostLike.post_id).where(PostLike.user_id == current_user.id)).all())
+    bookmarked_ids = set(session.exec(
+        select(Bookmark.post_id).where(Bookmark.user_id == current_user.id)).all())
+
+    return [
+        serialize_post(p, session, current_user, liked_ids, bookmarked_ids)
+        for p in posts
+    ]

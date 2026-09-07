@@ -1,10 +1,8 @@
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 import { Navbar } from './Navbar';
 import { Footer } from './Footer';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { toggleRole } from '../../features/users/usersSlice';
-
-const LOGGED_OUT_ROUTES = ['/signin', '/signup'];
 
 export function Layout() {
   const dispatch = useAppDispatch();

@@ -2,7 +2,8 @@ import { Lock, Trash2 } from 'lucide-react';
 import { Avatar } from '../ui/Avatar';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
-import type { User } from '../../data/mockData';
+import { formatDate } from '../../utils/format';
+import type { User } from '../../types';
 
 export interface UserRowProps {
   user: User;
@@ -12,13 +13,13 @@ export interface UserRowProps {
 }
 
 export function UserRow({ user, postCount, onToggleRestrict, onDelete }: UserRowProps) {
-  const restricted = user.status === 'restricted';
+  const restricted = user.is_banned;
   return (
     <div className="flex items-center gap-3.5 py-3.25 border-b border-border last:border-b-0">
-      <Avatar user={user} size={36} />
+      <Avatar user={user.display_name} size={36} />
       <div className="flex-1">
         <div className="font-display font-bold flex items-center gap-1.5">
-          {user.name}
+          {user.display_name}
           {user.role === 'admin' && <Badge variant="neutral">admin</Badge>}
           {restricted && (
             <Badge variant="danger">
@@ -28,7 +29,7 @@ export function UserRow({ user, postCount, onToggleRestrict, onDelete }: UserRow
           )}
         </div>
         <div className="text-[12.5px] text-ink-soft">
-          {user.email} · {postCount} posts · joined {user.joinedAt}
+          {user.email} · {postCount} posts · joined {formatDate(user.created_at)}
         </div>
       </div>
       <Button size="sm" onClick={() => onToggleRestrict(user.id)}>

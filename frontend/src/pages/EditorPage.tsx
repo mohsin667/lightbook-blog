@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Check, Code, FileText, Trash2 } from 'lucide-react';
 import { Input } from '../components/ui/Input';
@@ -6,9 +6,12 @@ import { Select } from '../components/ui/Select';
 import { Textarea } from '../components/ui/Textarea';
 import { Button } from '../components/ui/Button';
 import { InlineCode } from '../components/post/InlineCode';
+import { TagInput } from '../components/post/TagInput';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
 import { showToast } from '../features/toast/toastSlice';
-import { createPosts } from '../features/posts/createPostThunk';
+import {
+  createPosts, updatePost, publishPost, deletePost, getDrafts,
+} from '../features/posts/createPostThunk';
 import refreshAPI from '../api/refreshAPI';
 
 export function EditorPage() {
@@ -16,19 +19,39 @@ export function EditorPage() {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const posts = useAppSelector((s) => s.posts.list);
+  const drafts = useAppSelector((s) => s.posts.drafts);
   const categories = useAppSelector((s) => s.categories.list);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const uploadInput = useRef<HTMLInputElement>(null);
 
-  const editing = id ? posts.find((p) => p.id === id) : undefined;
+  const editing = id ? [...posts, ...drafts].find((p) => p.id === id) : undefined;
 
-  const [title, setTitle] = useState(editing?.title ?? '');
+  const [title, setTitle] = useState('');
   const [category, setCategory] = useState('');
-  const [excerpt, setExcerpt] = useState(editing?.excerpt ?? '');
-  const [image, setImage] = useState<string>("");
-  const [content, setContent] = useState(editing?.content ?? '');
+  const [excerpt, setExcerpt] = useState('');
+  const [image, setImage] = useState('');
+  const [content, setContent] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
+  // drafts aren't in the published list, so make sure they're fetched before
+  // deciding the post can't be found
+  useEffect(() => {
+    if (id) dispatch(getDrafts());
+  }, [dispatch, id]);
+
+  // seed the form once, when the post being edited first becomes available
+  useEffect(() => {
+    if (!editing || loaded) return;
+    setTitle(editing.title);
+    setCategory(editing.category_id ?? '');
+    setExcerpt(editing.excerpt);
+    setImage(editing.cover_image_url ?? '');
+    setContent(editing.content);
+    setTags(editing.tags.map((t) => t.name));
+    setLoaded(true);
+  }, [editing, loaded]);
 
   const insertAtCursor = (before: string, after: string, placeholder: string) => {
     const ta = textareaRef.current;
@@ -45,27 +68,57 @@ export function EditorPage() {
     });
   };
 
-  const handleSave = (status: 'published' | 'draft') => {
+  const handleSave = async (status: 'published' | 'draft') => {
     if (!title.trim()) {
       dispatch(showToast('Give your post a title'));
       return;
     }
-    const input = {
+
+    const payload = {
       title: title.trim(),
       excerpt: excerpt.trim(),
       content: content.trim(),
-      cover_image_url: image,
-      category_id: category,
-      tags: [],
-      publish: status === 'published',
+      // never submit the local blob: preview — only a finished S3 URL
+      cover_image_url: image.startsWith('blob:') ? undefined : image || undefined,
+      category_id: category || undefined,
+      tags,
     };
-    dispatch(createPosts(input));
-    dispatch(showToast(status === 'published' ? 'Post published' : 'Draft saved', Check));
+
+    if (editing) {
+      const result = await dispatch(updatePost({ id: editing.id, updates: payload }));
+      if (updatePost.rejected.match(result)) {
+        dispatch(showToast((result.payload as string) ?? 'Could not save changes'));
+        return;
+      }
+      if (status === 'published' && editing.status !== 'published') {
+        const published = await dispatch(publishPost(editing.id));
+        if (publishPost.rejected.match(published)) {
+          dispatch(showToast((published.payload as string) ?? 'Could not publish'));
+          return;
+        }
+      }
+      dispatch(showToast(status === 'published' ? 'Post published' : 'Changes saved', Check));
+    } else {
+      const result = await dispatch(
+        createPosts({ ...payload, publish: status === 'published' }),
+      );
+      if (createPosts.rejected.match(result)) {
+        dispatch(showToast((result.payload as string) ?? 'Could not save post'));
+        return;
+      }
+      dispatch(showToast(status === 'published' ? 'Post published' : 'Draft saved', Check));
+    }
+
     navigate(status === 'published' ? '/' : '/dashboard');
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!editing) return;
+    const result = await dispatch(deletePost(editing.id));
+    if (deletePost.rejected.match(result)) {
+      dispatch(showToast((result.payload as string) ?? 'Could not delete post'));
+      return;
+    }
     dispatch(showToast('Post deleted', Trash2));
     navigate('/dashboard');
   };
@@ -85,24 +138,30 @@ export function EditorPage() {
         body: JSON.stringify({ "filename": file.name, "content_type": file.type })
       })
 
+      if (!presignRes.ok) throw new Error('presign failed');
+
       const { upload_url, file_url } = await presignRes.json();
 
-      await fetch(upload_url, {
+      const putRes = await fetch(upload_url, {
         method: 'PUT',
         headers: { 'Content-Type': file.type },
         body: file
       })
+      if (!putRes.ok) throw new Error('upload failed');
+
       setImage(file_url);
       URL.revokeObjectURL(previewURL);
       dispatch(showToast('Image uploaded successfully'));
     }
     catch (err) {
+      // drop the unusable blob preview so it can never be submitted
+      URL.revokeObjectURL(previewURL);
+      setImage('');
       dispatch(showToast('Image upload failed'));
     }
     finally {
       setUploading(false)
     }
-
   }
 
   return (
@@ -115,6 +174,7 @@ export function EditorPage() {
 
       <div className="mb-4.5">
         <Select label="Category" value={category} onChange={(e) => setCategory(e.target.value)}>
+          <option value="">Uncategorized</option>
           {categories.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
@@ -133,6 +193,10 @@ export function EditorPage() {
       </div>
 
       <div className="mb-4.5">
+        <TagInput tags={tags} onChange={setTags} />
+      </div>
+
+      <div className="mb-4.5">
         <div className="flex relative">
           {!uploading && (
             <>
@@ -142,8 +206,8 @@ export function EditorPage() {
                 Upload
               </Button>
             </>
-
           )}
+          {uploading && <span className="text-ink-soft text-sm">Uploading image…</span>}
         </div>
         {image !== "" &&
           <div className="w-full aspect-video rounded-lg overflow-hidden border border-border-strong mt-2.5 bg-surface-tint">
@@ -178,11 +242,11 @@ export function EditorPage() {
       </div>
 
       <div className="flex gap-2.5 flex-wrap">
-        <Button variant="primary" onClick={() => handleSave('published')}>
+        <Button variant="primary" disabled={uploading} onClick={() => handleSave('published')}>
           <Check size={16} strokeWidth={1.75} />
-          Publish
+          {editing?.status === 'published' ? 'Save changes' : 'Publish'}
         </Button>
-        <Button onClick={() => handleSave('draft')}>
+        <Button disabled={uploading} onClick={() => handleSave('draft')}>
           <FileText size={16} strokeWidth={1.75} />
           Save as draft
         </Button>

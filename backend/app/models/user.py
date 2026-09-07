@@ -22,3 +22,10 @@ class User(SQLModel, table=True):
     is_banned: bool = Field(default=False)
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc))
+
+
+class Follow(SQLModel, table=True):
+    follower_id: uuid.UUID = Field(foreign_key="user.id", primary_key=True)
+    followed_id: uuid.UUID = Field(foreign_key="user.id", primary_key=True)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc))

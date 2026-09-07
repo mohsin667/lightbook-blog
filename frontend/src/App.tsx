@@ -14,17 +14,19 @@ import { useEffect } from 'react';
 import { checkAuth } from './features/auth/checkAuthSlice';
 import ProtectedRoute from './pages/ProtectedRoute';
 import PublicOnlyRoute from './pages/PublicOnlyRoute';
+import AdminRoute from './pages/AdminRoute';
+import { AdminPage } from './pages/AdminPage';
 import { fetchCategories } from './features/categories/categoriesSlice';
 import { getAllPosts } from './features/posts/createPostThunk';
-import { getAuthors } from './features/users/usersSlice';
+import { getTopAuthors } from './features/users/usersSlice';
 
 function App() {
   const dispatch = useAppDispatch()
   useEffect(() => {
     dispatch(checkAuth())
     dispatch(fetchCategories())
-    dispatch(getAllPosts())
-    dispatch(getAuthors())
+    dispatch(getAllPosts({ skip: 0 }))
+    dispatch(getTopAuthors())
   }, [dispatch])
 
   return (
@@ -40,7 +42,7 @@ function App() {
             <Route path="/profile/:id" element={<ProfilePage />} />
             <Route path="/search" element={<SearchPage />} />
             <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-            {/* <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} /> */}
+            <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
             <Route path="/signin" element={<PublicOnlyRoute><SignInPage /></PublicOnlyRoute>} />
             <Route path="/signup" element={<PublicOnlyRoute><SignUpPage /></PublicOnlyRoute>} />
           </Route>
