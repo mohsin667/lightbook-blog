@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timezone
+from fastapi import Request
 from fastapi import FastAPI, Depends, HTTPException, Response, Cookie, Query
 from sqlmodel import Session, select
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,13 +11,15 @@ from app.schemas.user import (
 )
 from app.schemas.upload import PresignRequest
 from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token, decode_token
+from app.core.search_cache import get_or_embed_query, check_rate_limit
+from app.core.embeddings import embed_text
 from app.core.db import get_session
 from app.core.s3 import s3_client
 from app.deps import (
     get_current_user, generate_slug, generate_username, get_current_user_optional,
     get_owned_post, apply_publish, require_admin, generate_category_slug,
     get_or_create_tags, sync_post_tags, serialize_post, serialize_posts,
-    serialize_user_summary, serialize_comment,
+    serialize_user_summary, serialize_comment, sync_post_embedding
 )
 from app.schemas.post import (
     PostPublic, PostCreate, PostUpdate, CategoryCreate, CategoryPublic, TagPublic,
@@ -26,7 +29,6 @@ from app.models.post import (
     Post, PostType, Category, Tag, PostTag, PostLike, Bookmark, Comment, PostReport,
 )
 from sqlmodel import func
-import math
 
 
 app = FastAPI()
@@ -66,7 +68,7 @@ def register_user(data: UserCreate, session: Session = Depends(get_session)):
     session.refresh(user)
     return user
 
-@app.post("/api/auth/login")
+@app.post("/api/auth/login", response_model=UserPublic)
 def login_user(data: UserLogin, response: Response, session: Session = Depends(get_session)):
     user = session.exec(select(User).where(User.email == data.email)).first()
 
@@ -95,7 +97,7 @@ def login_user(data: UserLogin, response: Response, session: Session = Depends(g
         max_age=7 * 24 * 60 * 60,
     )
 
-    return {"message": "Login successful"}
+    return user
 
 @app.get("/api/auth/me", response_model=UserPublic)
 def read_current_user(response: Response,current_user: User = Depends(get_current_user)):
@@ -135,7 +137,7 @@ def create_post(data: PostCreate, session: Session = Depends(get_session), curre
     if data.tags:
         tag_objs = get_or_create_tags(data.tags, session)
         sync_post_tags(post, tag_objs, session)
-
+    sync_post_embedding(post, session)
     return serialize_post(post, session, current_user)
 
 @app.get("/api/posts/drafts", response_model=list[PostPublic])
@@ -215,6 +217,32 @@ def search_posts(
         )
         .order_by(Post.published_at.desc())
         .offset(skip)
+        .limit(limit)
+    )
+    posts = session.exec(statement).all()
+    return serialize_posts(posts, session, current_user)
+
+@app.get("/api/search/semantic", response_model=list[PostPublic])
+def semantic_search(
+    request: Request,
+    q: str = Query(min_length=2, max_length=200),
+    limit: int = Query(default=20, ge=1, le=50),
+    session: Session = Depends(get_session),
+    current_user: User | None = Depends(get_current_user_optional),
+):
+    rate_key = str(current_user.id) if current_user else (request.client.host if request.client else "anon")
+    if not check_rate_limit(rate_key):
+        raise HTTPException(status_code=429, detail="Too many search requests — please slow down")
+
+    query_vector = get_or_embed_query(q, embed_text)
+
+    if query_vector is None:
+        return search_posts(q=q, skip=0, limit=limit, session=session, current_user=current_user)
+
+    statement = (
+        select(Post)
+        .where(Post.status == PostType.published, Post.embedding.is_not(None))
+        .order_by(Post.embedding.cosine_distance(query_vector))
         .limit(limit)
     )
     posts = session.exec(statement).all()
@@ -318,7 +346,7 @@ def update_post(
     session.add(post)
     session.commit()
     session.refresh(post)
-
+    sync_post_embedding(post, session)
     if tag_names is not None:
         tag_objs = get_or_create_tags(tag_names, session)
         sync_post_tags(post, tag_objs, session)
@@ -338,6 +366,7 @@ def publish_post(
     session.add(post)
     session.commit()
     session.refresh(post)
+    sync_post_embedding(post, session)
     return serialize_post(post, session, current_user)
 
 @app.delete("/api/posts/{post_id}", status_code=204)

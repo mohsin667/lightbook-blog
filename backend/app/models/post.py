@@ -3,6 +3,12 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 from sqlmodel import SQLModel, Field
+from sqlalchemy import Column
+from pgvector.sqlalchemy import Vector
+
+# BGE-M3 (the embedding model we call via Cloudflare Workers AI) outputs
+# 1024-dimensional vectors — this must match that model's output size.
+EMBEDDING_DIM = 1024
 
 class PostType(str, Enum):
     draft: str = "draft"
@@ -25,6 +31,10 @@ class Post(SQLModel, table=True):
     published_at: Optional[datetime] = None
     cover_image_url: Optional[str] = None
     is_featured: bool = Field(default=False, index=True)
+    # sha256 of title+content — lets us skip re-embedding when a save
+    # didn't actually change the meaning of the post (e.g. a typo-only edit).
+    content_hash: Optional[str] = Field(default=None, index=True)
+    embedding: Optional[list[float]] = Field(default=None, sa_column=Column(Vector(EMBEDDING_DIM)))
 
 class Category(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)

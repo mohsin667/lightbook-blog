@@ -4,6 +4,7 @@ from fastapi import Depends, Cookie, HTTPException
 from app.models.user import User, Follow
 from app.core.security import decode_token
 from app.core.db import get_session
+from app.core.embeddings import content_hash, embed_text
 from sqlmodel import Session, select, func
 from app.models.post import Post, PostType, Category, Tag, PostTag, PostLike, Bookmark
 import re, secrets, math
@@ -72,6 +73,27 @@ def apply_publish(post: Post) -> None:
     post.read_time_minutes = max(1, math.ceil(word_count / 200))
     if post.published_at is None:
         post.published_at = datetime.now(timezone.utc)
+
+def sync_post_embedding(post: Post, session: Session) -> None:
+    """Re-embed a post's title+content if it's published and the content
+    actually changed since the last embed (content-hash cache). Drafts are
+    skipped — no point spending an API call on content nobody can search
+    for yet."""
+    if post.status != PostType.published:
+        return
+
+    new_hash = content_hash(post.title, post.content)
+    if new_hash == post.content_hash:
+        return 
+
+    vector = embed_text(f"{post.title}\n\n{post.content}")
+    if vector is None:
+        return  # call failed — leave content_hash as-is so the next save retries
+
+    post.embedding = vector
+    post.content_hash = new_hash
+    session.add(post)
+    session.commit()
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != "admin":
@@ -197,3 +219,4 @@ def serialize_posts(posts, session: Session, current_user: User | None = None) -
         serialize_post(p, session, current_user, liked_ids, bookmarked_ids)
         for p in posts
     ]
+
