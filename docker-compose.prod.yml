@@ -53,7 +53,14 @@ services:
     # Idle by default — see deploy notes for the one-off "certonly" run that
     # issues the first cert, and the renew loop below (commented out) once
     # nginx.ssl.conf is live.
-    entrypoint: sh -c "trap exit TERM; while :; do sleep 12h; done"
+    #
+    # This must be `command`, not `entrypoint`: `entrypoint` replaces the
+    # image's real entrypoint (the certbot binary itself) unconditionally,
+    # so `docker compose run --rm certbot certonly ...` would just pass
+    # "certonly ..." as unused arguments to this idle shell loop instead of
+    # ever invoking certbot. `command` is the default CMD, which `run`
+    # properly overrides while leaving the image's own entrypoint intact.
+    command: sh -c "trap exit TERM; while :; do sleep 12h; done"
 
 networks:
   lightbook:
