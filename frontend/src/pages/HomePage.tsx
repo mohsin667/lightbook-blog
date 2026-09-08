@@ -147,9 +147,10 @@ export function HomePage() {
         </div>
       </div>
 
+      {/* Hidden on mobile — the bottom nav's center button covers this there. */}
       <Link
         to="/write"
-        className="fixed bottom-7 right-7 w-14 h-14 rounded-2xl bg-coral flex items-center justify-center shadow-[0_8px_24px_rgba(255,106,77,0.28)] hover:bg-[#ff7d61]"
+        className="hidden min-[761px]:flex fixed bottom-7 right-7 w-14 h-14 rounded-2xl bg-coral items-center justify-center shadow-[0_8px_24px_rgba(255,106,77,0.28)] hover:bg-[#ff7d61]"
         title="Write a post"
       >
         <PenLine size={24} strokeWidth={1.75} className="text-coral-deep" />

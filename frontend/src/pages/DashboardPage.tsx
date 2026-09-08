@@ -48,8 +48,8 @@ export function DashboardPage() {
           <Card className="mb-6.5">
             {drafts.map((p) => (
               <div key={p.id} className="flex items-center gap-3.5 py-3.25 border-b border-border last:border-b-0">
-                <div className="flex-1">
-                  <div className="font-display font-bold">{p.title}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-display font-bold truncate">{p.title}</div>
                   <div className="text-[12.5px] text-ink-soft">Last edited {timeAgo(p.updated_at)}</div>
                 </div>
                 <Link to={`/write/${p.id}`}>
@@ -72,9 +72,9 @@ export function DashboardPage() {
         {published.length ? (
           published.map((p) => (
             <div key={p.id} className="flex items-center gap-3.5 py-3.25 border-b border-border last:border-b-0">
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <CategoryBadge category_name={p.category_name} />
-                <div className="font-display font-bold mt-1">{p.title}</div>
+                <div className="font-display font-bold mt-1 truncate">{p.title}</div>
                 <div className="flex items-center gap-1.5 text-[12.5px] text-ink-soft">
                   <Eye size={12} strokeWidth={1.75} /> {p.view_count}
                   <span>·</span>

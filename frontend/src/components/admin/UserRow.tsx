@@ -15,10 +15,10 @@ export interface UserRowProps {
 export function UserRow({ user, postCount, onToggleRestrict, onDelete }: UserRowProps) {
   const restricted = user.is_banned;
   return (
-    <div className="flex items-center gap-3.5 py-3.25 border-b border-border last:border-b-0">
+    <div className="flex items-center flex-wrap gap-3.5 py-3.25 border-b border-border last:border-b-0">
       <Avatar user={user.display_name} size={36} />
-      <div className="flex-1">
-        <div className="font-display font-bold flex items-center gap-1.5">
+      <div className="flex-1 min-w-[160px]">
+        <div className="font-display font-bold flex items-center gap-1.5 flex-wrap">
           {user.display_name}
           {user.role === 'admin' && <Badge variant="neutral">admin</Badge>}
           {restricted && (

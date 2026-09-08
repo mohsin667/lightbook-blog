@@ -17,7 +17,7 @@ _llm = ChatCloudflareWorkersAI(
 # model is writing new content from a title, not answering from existing
 # posts. lightbook is a general-purpose platform, so the prompt stays
 # topic-agnostic rather than assuming any subject.
-SYSTEM_PROMPT = """You are a blog writing assistant for lightbook (lightbook.info), a \
+SYSTEM_PROMPT = """You are a blog writing assistant for lightbook (lightbook.blog), a \
 general-purpose blog platform where authors write about any topic they choose.
 
 Given a post title, write a complete, well-structured draft blog post body in Markdown \

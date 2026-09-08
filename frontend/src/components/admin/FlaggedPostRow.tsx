@@ -15,8 +15,8 @@ export function FlaggedPostRow({ reported, onDismiss, onUnpublish }: FlaggedPost
   const { post, report_count } = reported;
   return (
     <Card className="mb-3">
-      <div className="flex justify-between items-start gap-3.5">
-        <div className="flex-1">
+      <div className="flex flex-wrap justify-between items-start gap-3.5">
+        <div className="flex-1 min-w-[200px]">
           <div className="flex items-center gap-2 flex-wrap">
             <CategoryBadge category_name={post.category_name} />
             <Badge variant="danger">

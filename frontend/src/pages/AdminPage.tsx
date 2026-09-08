@@ -182,8 +182,8 @@ function AnalyticsTab() {
           {topPosts.map((p, i) => (
             <div key={p.id} className="flex items-center gap-3.5 py-3.25 px-4.5 border-b border-border last:border-b-0">
               <div className="w-6 font-display font-bold text-ink-soft">{i + 1}</div>
-              <div className="flex-1">
-                <div className="font-display font-bold">{p.title}</div>
+              <div className="flex-1 min-w-0">
+                <div className="font-display font-bold truncate">{p.title}</div>
                 <div className="text-[12.5px] text-ink-soft">
                   {p.view_count} views · {p.like_count} likes
                 </div>

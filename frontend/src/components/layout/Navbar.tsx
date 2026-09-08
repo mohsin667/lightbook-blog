@@ -56,7 +56,7 @@ export function Navbar({ isAuthenticated = true, role, onToggleRole }: NavbarPro
       <div className="max-w-[1080px] mx-auto flex items-center justify-between gap-4 px-6 py-4">
         <Link to="/" className="flex items-center gap-2 text-xl font-display font-bold whitespace-nowrap">
           <PenLine size={20} strokeWidth={1.75} className="text-coral" />
-          lightbook<span className="text-coral">.info</span>
+          lightbook<span className="text-coral">.blog</span>
         </Link>
 
         {isAuthenticated && (
@@ -84,7 +84,9 @@ export function Navbar({ isAuthenticated = true, role, onToggleRole }: NavbarPro
         )}
 
         <div className="flex items-center gap-2.5">
-          <div ref={searchRef} className="relative">
+          {/* Search moves to its own tab in the mobile bottom nav — the top
+              bar stays to just logo + avatar there. */}
+          <div ref={searchRef} className="relative hidden min-[761px]:block">
             <div className="flex items-center gap-1.5 bg-surface-tint rounded-lg px-3 py-[7px] border border-border focus-within:border-coral">
               <Search size={15} strokeWidth={1.75} className="text-ink-soft" />
               <input
@@ -140,7 +142,7 @@ export function Navbar({ isAuthenticated = true, role, onToggleRole }: NavbarPro
               {isAdmin && (
                 <button
                   onClick={onToggleRole}
-                  className={`flex items-center gap-1.5 rounded-lg px-3 py-[7px] font-display font-semibold text-[13px] border transition-colors ${role === 'admin'
+                  className={`hidden min-[761px]:flex items-center gap-1.5 rounded-lg px-3 py-[7px] font-display font-semibold text-[13px] border transition-colors ${role === 'admin'
                     ? 'bg-coral text-coral-deep border-coral'
                     : 'bg-surface-tint text-ink border-border'
                     }`}

@@ -94,12 +94,12 @@ export function ProfilePage() {
           </div>
         </Card>
       ) : (
-        <Card className="flex gap-4.5 items-center mb-5.5">
+        <Card className="flex flex-wrap gap-4.5 items-center mb-5.5">
           <Avatar user={user.display_name} size={64} />
-          <div className="flex-1">
-            <h1 className="text-[22px] font-display font-bold m-0">{user.display_name}</h1>
-            <p className="my-1 text-ink-soft">@{user.username}</p>
-            <p className="m-0">{user.bio}</p>
+          <div className="flex-1 min-w-[160px]">
+            <h1 className="text-[22px] font-display font-bold m-0 break-words">{user.display_name}</h1>
+            <p className="my-1 text-ink-soft break-words">@{user.username}</p>
+            <p className="m-0 break-words">{user.bio}</p>
           </div>
           {isSelf ? (
             <Button size="sm" onClick={startEditing}>

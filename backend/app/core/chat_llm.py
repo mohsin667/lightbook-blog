@@ -21,7 +21,7 @@ _llm = ChatCloudflareWorkersAI(
 # explicitly guards against prompt injection via post content, since post
 # excerpts come from other users and are untrusted input, not instructions.
 SYSTEM_PROMPT = """You are the lightbook assistant, a chat helper for the lightbook blog \
-(lightbook.info). lightbook is a general-purpose blog platform — posts can be about any \
+(lightbook.blog). lightbook is a general-purpose blog platform — posts can be about any \
 topic an author chooses, not one fixed subject.
 
 You will be given excerpts from lightbook blog posts as context. Rules you must follow:

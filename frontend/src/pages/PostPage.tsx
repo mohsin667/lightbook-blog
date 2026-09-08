@@ -74,7 +74,7 @@ export function PostPage() {
 
       {post.cover_image_url && (
         <div className="w-full aspect-video rounded-xl overflow-hidden border border-border mb-6.5">
-          <img src={post.cover_image_url} alt="" className="w-full h-full object-cover block" />
+          <img src={post.cover_image_url} alt="" loading="lazy" className="w-full h-full object-cover block" />
         </div>
       )}
 

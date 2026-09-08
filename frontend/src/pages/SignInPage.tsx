@@ -22,7 +22,11 @@ export function SignInPage() {
       dispatch(showToast('Enter your email and password'));
       return;
     }
-    dispatch(loginUser({ email, password }))
+    const result = await dispatch(loginUser({ email, password }));
+    if (loginUser.rejected.match(result)) {
+      dispatch(showToast((result.payload as string) ?? 'Incorrect email or password'));
+      return;
+    }
     dispatch(showToast('Welcome back', Check));
   };
 
@@ -32,7 +36,7 @@ export function SignInPage() {
         <div className="text-center mb-7">
           <div className="flex items-center justify-center gap-2 text-xl font-display font-bold">
             <PenLine size={22} strokeWidth={1.75} className="text-coral" />
-            lightbook<span className="text-coral">.info</span>
+            lightbook<span className="text-coral">.blog</span>
           </div>
           <p className="text-ink-soft mt-2">Welcome back. Sign in to continue.</p>
         </div>
@@ -66,7 +70,7 @@ export function SignInPage() {
           </Link>
         </p>
         <p className="text-center text-ink-soft mt-2.5 text-xs">
-          Demo login: <InlineCode>you@lightbook.info</InlineCode> / <InlineCode>demo1234</InlineCode>
+          Demo login: <InlineCode>you@lightbook.blog</InlineCode> / <InlineCode>demo1234</InlineCode>
         </p>
       </div>
     </form>

@@ -213,8 +213,8 @@ export function EditorPage() {
     <div className="max-w-[680px] mx-auto px-6 pt-7">
       <h1 className="text-2xl font-display font-bold mb-5">{editing ? 'Edit post' : 'Write a new post'}</h1>
 
-      <div className="mb-4.5 flex items-end gap-2">
-        <div className="flex-1">
+      <div className="mb-4.5 flex flex-wrap items-end gap-2">
+        <div className="flex-1 min-w-[180px]">
           <Input label="Title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Give it a title" />
         </div>
         <Button

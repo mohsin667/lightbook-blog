@@ -15,7 +15,7 @@ export function SignUpPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  const handleSignUp = () => {
+  const handleSignUp = async () => {
     if (!name || !email || !password) {
       dispatch(showToast('Fill in all fields'));
       return;
@@ -28,17 +28,17 @@ export function SignUpPage() {
       dispatch(showToast("Passwords don't match"));
       return;
     }
-    dispatch(registerUser(
-      {
-        "username": name,
-        "email": email,
-        "password": password,
-        "display_name": name
-      }
-    )
-    )
+    const result = await dispatch(registerUser({
+      username: name,
+      email,
+      password,
+      display_name: name,
+    }));
+    if (registerUser.rejected.match(result)) {
+      dispatch(showToast((result.payload as string) ?? 'Could not create account'));
+      return;
+    }
     dispatch(showToast(`Welcome to lightbook, ${name}`, Plus));
-    // navigate('/');
   };
 
   return (
@@ -46,7 +46,7 @@ export function SignUpPage() {
       <div className="text-center mb-7">
         <div className="flex items-center justify-center gap-2 text-xl font-display font-bold">
           <PenLine size={22} strokeWidth={1.75} className="text-coral" />
-          lightbook<span className="text-coral">.info</span>
+          lightbook<span className="text-coral">.blog</span>
         </div>
         <p className="text-ink-soft mt-2">Create an account to start writing.</p>
       </div>
