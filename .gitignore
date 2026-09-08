@@ -15,5 +15,9 @@ frontend/dist/
 .vscode/
 .idea/
 
+# Production secrets (created directly on the server, never committed)
+.env
+.env.production
+
 # Misc
 testdelete.txt

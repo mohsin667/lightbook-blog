@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 const NO_REFRESH = ["/api/auth/login", "/api/auth/register", "/api/auth/refresh"]
 
 const refreshAPI = async (path: string, options: RequestInit = {}): Promise<Response> => {
