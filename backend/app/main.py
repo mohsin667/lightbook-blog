@@ -1,3 +1,4 @@
+import re
 import uuid
 from datetime import datetime, timezone
 from fastapi import Request
@@ -29,7 +30,28 @@ from app.models.post import (
     Post, PostType, Category, Tag, PostTag, PostLike, Bookmark, Comment, PostReport,
 )
 from sqlmodel import func
+from app.schemas.chat import ChatRequest, ChatResponse
+from app.core.chat_llm import generate_answer
+from app.core.search_cache import get_or_generate_chat_answer
+from app.schemas.generate import GeneratePostRequest, GeneratePostResponse
+from app.core.post_generation import generate_post_draft
 
+
+# Cosine distance ranges 0 (identical) to 2 (opposite). Empirically (see
+# inspect_distances.py), a genuinely relevant match on this dataset landed
+# at ~0.34, while unrelated posts clustered at 0.56-0.62 — 0.45 sits
+# safely in that real gap. Shared between semantic search and chat
+# retrieval so both use the same notion of "actually relevant." Revisit
+# with inspect_distances.py as more varied content gets added.
+SEMANTIC_DISTANCE_THRESHOLD = 0.45
+
+# Small talk shouldn't go through retrieval-and-refuse — "Hi" has no
+# meaningful embedding match against blog posts, so without this check it
+# would incorrectly get "I don't have a post about that."
+GREETING_PATTERN = re.compile(
+    r"^(hi+|hello+|hey+|yo+|sup|hola|greetings?|howdy|good\s*(morning|afternoon|evening))[\s!.,]*$",
+    re.IGNORECASE,
+)
 
 app = FastAPI()
 
@@ -109,6 +131,21 @@ def logout_user(response: Response):
     response.delete_cookie("access_token")
     response.delete_cookie("refresh_token")
     return {"message": "Logged out successfully"}
+
+@app.post("/api/posts/generate", response_model=GeneratePostResponse)
+def generate_post(
+    data: GeneratePostRequest,
+    current_user: User = Depends(get_current_user),  # requires auth — costs a real LLM call
+):
+    if not check_rate_limit(str(current_user.id), namespace="generate"):
+        raise HTTPException(status_code=429, detail="Too many generation requests — please slow down")
+
+    result = generate_post_draft(data.title)
+    if result is None:
+        raise HTTPException(status_code=502, detail="Could not generate content right now — please try again")
+    if result.get("refused"):
+        raise HTTPException(status_code=400, detail=result["reason"])
+    return result
 
 @app.post("/api/posts", response_model=PostPublic, status_code=201)
 def create_post(data: PostCreate, session: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
@@ -239,14 +276,136 @@ def semantic_search(
     if query_vector is None:
         return search_posts(q=q, skip=0, limit=limit, session=session, current_user=current_user)
 
+    distance = Post.embedding.cosine_distance(query_vector)
     statement = (
         select(Post)
-        .where(Post.status == PostType.published, Post.embedding.is_not(None))
-        .order_by(Post.embedding.cosine_distance(query_vector))
+        .where(
+            Post.status == PostType.published,
+            Post.embedding.is_not(None),
+            distance < SEMANTIC_DISTANCE_THRESHOLD,
+        )
+        .order_by(distance)
         .limit(limit)
     )
     posts = session.exec(statement).all()
+
+    if not posts:
+        # Nothing was close enough to be relevant — keyword search is more
+        # useful here than an empty result.
+        return search_posts(q=q, skip=0, limit=limit, session=session, current_user=current_user)
+
     return serialize_posts(posts, session, current_user)
+
+CHAT_CONTEXT_POST_LIMIT = 3
+
+def get_suggested_questions(session: Session, limit: int = 3) -> list[str]:
+    """Suggests a few starter questions grounded in categories that
+    actually have published posts, rather than generic hardcoded examples
+    that might not match anything on the blog."""
+    statement = (
+        select(Category.name)
+        .join(Post, Post.category_id == Category.id)
+        .where(Post.status == PostType.published)
+        .distinct()
+        .limit(limit)
+    )
+    names = session.exec(statement).all()
+    return [f"What can you tell me about {name}?" for name in names]
+
+@app.post("/api/chat", response_model=ChatResponse)
+def chat(
+    data: ChatRequest,
+    request: Request,
+    session: Session = Depends(get_session),
+    current_user: User | None = Depends(get_current_user_optional),
+):
+    # Chat calls an LLM, not just embeddings — meaningfully more expensive
+    # than search, so it gets its own (tighter) rate-limit budget rather
+    # than sharing search's.
+    rate_key = str(current_user.id) if current_user else (request.client.host if request.client else "anon")
+    if not check_rate_limit(rate_key, namespace="chat"):
+        raise HTTPException(status_code=429, detail="Too many chat requests — please slow down")
+
+    if GREETING_PATTERN.match(data.message.strip()):
+        # Small talk skips retrieval and the LLM entirely — cheaper, and
+        # avoids the retrieval-grounded "I don't have a post about that"
+        # response firing on a message that was never a real question.
+        return {
+            "answer": "Hi! I'm the lightbook assistant. I can answer questions about posts on this blog — what would you like to know?",
+            "sources": [],
+            "suggestions": get_suggested_questions(session),
+        }
+
+    def compute() -> dict | None:
+        # Returning None means "a technical failure happened, don't cache
+        # this" — as opposed to a legitimate answer (including "no post
+        # found," which is a real, cacheable answer, not a failure).
+        query_vector = get_or_embed_query(data.message, embed_text)
+        if query_vector is None:
+            return None
+
+        distance = Post.embedding.cosine_distance(query_vector)
+        statement = (
+            select(Post)
+            .where(
+                Post.status == PostType.published,
+                Post.embedding.is_not(None),
+                distance < SEMANTIC_DISTANCE_THRESHOLD,
+            )
+            .order_by(distance)
+            .limit(CHAT_CONTEXT_POST_LIMIT)
+        )
+        posts = session.exec(statement).all()
+
+        if not posts and data.previous_sources:
+            # No independent topical match — but if this looks like a
+            # follow-up on what was just discussed (frontend sent the
+            # previous answer's source slugs), fall back to those posts
+            # rather than incorrectly refusing. Handles "who wrote it?",
+            # "when was it published?" etc. that don't retrieve on their own.
+            posts = session.exec(
+                select(Post).where(
+                    Post.slug.in_(data.previous_sources),
+                    Post.status == PostType.published,
+                )
+            ).all()
+
+        if not posts:
+            # Strictly grounded in blog content: if nothing relevant was
+            # found, say so rather than calling the LLM to answer from its
+            # own general knowledge — also skips the (most expensive) call
+            # entirely when there's nothing useful to ground it in.
+            return {"answer": "I don't have a post about that on lightbook yet.", "sources": []}
+
+        posts_with_authors = []
+        for p in posts:
+            author = session.get(User, p.author_id)
+            posts_with_authors.append({
+                "title": p.title,
+                "content": p.content,
+                "author_name": author.display_name if author else "Unknown",
+            })
+
+        answer = generate_answer(data.message, posts_with_authors)
+        if answer is None:
+            return None
+
+        return {
+            "answer": answer,
+            "sources": [{"title": p.title, "slug": p.slug} for p in posts],
+        }
+
+    # Include previous_sources in the cache key — the same question text
+    # can mean different things depending on which post it's a follow-up
+    # to, so it can't share a cache entry across different conversations.
+    cache_key = data.message + "|" + ",".join(sorted(data.previous_sources))
+    result = get_or_generate_chat_answer(cache_key, compute)
+    if result is None:
+        return {
+            "answer": "Sorry, I couldn't process that right now — please try again in a moment.",
+            "sources": [],
+        }
+    return result
 
 @app.get("/api/categories", response_model=list[CategoryPublic])
 def list_categories(session: Session = Depends(get_session)):

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Check, Code, FileText, Trash2 } from 'lucide-react';
+import { Check, Code, FileText, ImagePlus, Loader2, Sparkles, Trash2, X } from 'lucide-react';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Textarea } from '../components/ui/Textarea';
@@ -34,6 +34,8 @@ export function EditorPage() {
   const [tags, setTags] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   // drafts aren't in the published list, so make sure they're fetched before
   // deciding the post can't be found
@@ -112,6 +114,34 @@ export function EditorPage() {
     navigate(status === 'published' ? '/' : '/dashboard');
   };
 
+  const handleGenerate = async () => {
+    if (!title.trim() || generating) return;
+
+    setGenerating(true);
+    try {
+      const res = await refreshAPI('/api/posts/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: title.trim() }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        dispatch(showToast(body?.detail ?? 'Could not generate content right now'));
+        return;
+      }
+
+      const data = await res.json();
+      setContent(data.content);
+      setExcerpt(data.excerpt);
+      dispatch(showToast('Draft generated — review and edit before publishing', Sparkles));
+    } catch {
+      dispatch(showToast('Could not reach the server — please try again'));
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!editing) return;
     const result = await dispatch(deletePost(editing.id));
@@ -123,10 +153,12 @@ export function EditorPage() {
     navigate('/dashboard');
   };
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const uploadFile = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      dispatch(showToast('Please choose an image file'));
+      return;
+    }
 
-    if (!file) return;
     const previewURL = URL.createObjectURL(file);
     setImage(previewURL);
 
@@ -164,12 +196,37 @@ export function EditorPage() {
     }
   }
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadFile(file);
+    e.target.value = ''; // allow re-selecting the same file later
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) uploadFile(file);
+  };
+
   return (
     <div className="max-w-[680px] mx-auto px-6 pt-7">
       <h1 className="text-2xl font-display font-bold mb-5">{editing ? 'Edit post' : 'Write a new post'}</h1>
 
-      <div className="mb-4.5">
-        <Input label="Title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Give it a title" />
+      <div className="mb-4.5 flex items-end gap-2">
+        <div className="flex-1">
+          <Input label="Title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Give it a title" />
+        </div>
+        <Button
+          type="button"
+          disabled={!title.trim() || generating}
+          onClick={handleGenerate}
+          title="Generate a draft from the title"
+          className="h-[47px]"
+        >
+          <Sparkles size={15} strokeWidth={1.75} />
+          {generating ? 'Generating…' : 'Generate with AI'}
+        </Button>
       </div>
 
       <div className="mb-4.5">
@@ -197,23 +254,57 @@ export function EditorPage() {
       </div>
 
       <div className="mb-4.5">
-        <div className="flex relative">
-          {!uploading && (
-            <>
-              <label id="upload-image" className="absolute z-0 top-2">Upload Image</label>
-              <input ref={uploadInput} name="upload-image" type="file" accept="image/*" onChange={handleFileSelect} className="text-transparent position-relative w-37.5 z-10 cursor-pointer" />
-              <Button variant="danger" className="ml-2" onClick={() => uploadInput.current?.click()}>
-                Upload
-              </Button>
-            </>
-          )}
-          {uploading && <span className="text-ink-soft text-sm">Uploading image…</span>}
-        </div>
-        {image !== "" &&
-          <div className="w-full aspect-video rounded-lg overflow-hidden border border-border-strong mt-2.5 bg-surface-tint">
+        <label className="block font-display font-semibold text-[13.5px] mb-1.5 text-ink-soft">Cover image</label>
+
+        <input
+          ref={uploadInput}
+          name="upload-image"
+          type="file"
+          accept="image/*"
+          onChange={handleFileSelect}
+          className="hidden"
+        />
+
+        {image && !uploading ? (
+          <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-border group">
             <img src={image} alt="" className="w-full h-full object-cover block" />
+            <div className="absolute inset-0 bg-bg/0 group-hover:bg-bg/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+              <Button type="button" size="sm" onClick={() => uploadInput.current?.click()}>
+                <ImagePlus size={14} strokeWidth={1.75} />
+                Replace
+              </Button>
+              <Button type="button" size="sm" variant="danger" onClick={() => setImage('')}>
+                <X size={14} strokeWidth={1.75} />
+                Remove
+              </Button>
+            </div>
           </div>
-        }
+        ) : (
+          <div
+            onClick={() => !uploading && uploadInput.current?.click()}
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+            className={`w-full aspect-video rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 text-center px-6 transition-colors ${uploading ? 'cursor-default border-border' : 'cursor-pointer'
+              } ${isDragging ? 'border-coral bg-coral-light' : 'bg-surface-tint border-border hover:border-border-strong'
+              }`}
+          >
+            {uploading ? (
+              <>
+                <Loader2 size={22} strokeWidth={1.75} className="text-ink-soft animate-spin" />
+                <p className="text-sm font-display font-semibold text-ink m-0">Uploading…</p>
+              </>
+            ) : (
+              <>
+                <ImagePlus size={22} strokeWidth={1.75} className="text-ink-soft" />
+                <p className="text-sm font-display font-semibold text-ink m-0">
+                  Click to choose an image or drag and drop it here
+                </p>
+                <p className="text-[12.5px] text-ink-soft m-0">PNG, JPG or WEBP</p>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="mb-4.5">
