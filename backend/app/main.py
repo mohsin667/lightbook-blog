@@ -224,18 +224,44 @@ def get_post_by_slug(
 def get_posts(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=100),
+    category_id: str | None = Query(default=None),
     session: Session = Depends(get_session),
     current_user: User | None = Depends(get_current_user_optional),
 ):
+    conditions = [Post.status == PostType.published]
+    if category_id:
+        conditions.append(Post.category_id == category_id)
     statement = (
         select(Post)
-        .where(Post.status == PostType.published)
+        .where(*conditions)
         .order_by(Post.published_at.desc())
         .offset(skip)
         .limit(limit)
     )
     posts = session.exec(statement).all()
     return serialize_posts(posts, session, current_user)
+
+@app.get("/api/posts/count")
+def get_posts_count(
+    category_id: str | None = Query(default=None),
+    session: Session = Depends(get_session),
+):
+    conditions = [Post.status == PostType.published]
+    if category_id:
+        conditions.append(Post.category_id == category_id)
+    total = session.exec(select(func.count()).select_from(Post).where(*conditions)).one()
+    return {"total": total}
+
+@app.get("/api/search/count")
+def get_search_count(q: str = Query(min_length=1), session: Session = Depends(get_session)):
+    pattern = f"%{q}%"
+    total = session.exec(
+        select(func.count()).select_from(Post).where(
+            Post.status == PostType.published,
+            (Post.title.ilike(pattern)) | (Post.excerpt.ilike(pattern)) | (Post.content.ilike(pattern)),
+        )
+    ).one()
+    return {"total": total}
 
 @app.get("/api/search", response_model=list[PostPublic])
 def search_posts(

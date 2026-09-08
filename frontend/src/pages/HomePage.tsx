@@ -1,41 +1,52 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronUp, FileText, Heart, PenLine, Tag, Users } from 'lucide-react';
 import { FeaturedHero } from '../components/post/FeaturedHero';
 import { PostGrid } from '../components/post/PostGrid';
+import { Pagination } from '../components/ui/Pagination';
 import { getIconForCategoryName } from '../components/post/CategoryBadge';
 import { Card } from '../components/ui/Card';
 import { Avatar } from '../components/ui/Avatar';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
-import { getAllPosts } from '../features/posts/createPostThunk';
-import { Button } from '../components/ui/Button';
+import { getPostsPage, fetchPostsTotal, PAGE_SIZE } from '../features/posts/createPostThunk';
 
-const ALL = 'All';
+const ALL = 'ALL';
 
 export function HomePage() {
   const dispatch = useAppDispatch();
   const posts = useAppSelector((s) => s.posts.list);
-  const hasMore = useAppSelector((s) => s.posts.hasMore);
-  const loadedCount = useAppSelector((s) => s.posts.loadedCount);
-  const status = useAppSelector((s) => s.posts.status);
+  const homeFeed = useAppSelector((s) => s.posts.homeFeed);
+  const total = useAppSelector((s) => s.posts.total);
   const featuredId = useAppSelector((s) => s.posts.featuredId);
   const categories = useAppSelector((s) => s.categories.list);
   const topAuthors = useAppSelector((s) => s.users.topAuthors);
   const [filter, setFilter] = useState(ALL);
+  const [page, setPage] = useState(1);
   const [showAllCategories, setShowAllCategories] = useState(false);
   const CATEGORY_PREVIEW_COUNT = 10;
   const visibleCategories = showAllCategories
     ? categories
     : categories.slice(0, CATEGORY_PREVIEW_COUNT);
 
+  const categoryId = filter === ALL ? undefined : filter;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  useEffect(() => {
+    dispatch(getPostsPage({ page, categoryId }));
+  }, [dispatch, page, categoryId]);
+
+  useEffect(() => {
+    dispatch(fetchPostsTotal({ categoryId }));
+  }, [dispatch, categoryId]);
+
+  const handleFilterChange = (value: string) => {
+    setFilter(value);
+    setPage(1);
+  };
+
   const featured = useMemo(
     () => posts.find((p) => p.id === featuredId) ?? posts[0],
     [posts, featuredId],
-  );
-
-  const visible = useMemo(
-    () => (filter === ALL ? posts : posts.filter((p) => p.category_name === filter)),
-    [posts, filter],
   );
 
   return (
@@ -51,28 +62,19 @@ export function HomePage() {
           <div className="mb-4.5 max-w-[260px]">
             <select
               value={filter}
-              onChange={(e) => setFilter(e.target.value)}
+              onChange={(e) => handleFilterChange(e.target.value)}
               className="w-full bg-surface-tint border border-border rounded-lg px-3.5 py-2 text-sm font-display font-semibold text-ink outline-none focus:border-coral"
             >
               <option value={ALL}>All categories</option>
               {categories.map((c) => (
-                <option key={c.id} value={c.name}>
+                <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
               ))}
             </select>
           </div>
-          <PostGrid posts={visible} emptyMessage="No posts in this category yet." />
-          {hasMore && filter === ALL && (
-            <div className="flex justify-center mt-5">
-              <Button
-                disabled={status === 'loading'}
-                onClick={() => dispatch(getAllPosts({ skip: loadedCount }))}
-              >
-                {status === 'loading' ? 'Loading…' : 'Load more'}
-              </Button>
-            </div>
-          )}
+          <PostGrid posts={homeFeed} emptyMessage="No posts in this category yet." />
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         </div>
 
         <div>
@@ -113,8 +115,8 @@ export function HomePage() {
                 return (
                   <button
                     key={c.id}
-                    onClick={() => setFilter(c.name)}
-                    className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-display font-semibold border ${filter === c.name
+                    onClick={() => handleFilterChange(c.id)}
+                    className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-display font-semibold border ${filter === c.id
                       ? 'border-coral bg-coral-light text-ink'
                       : 'border-transparent bg-surface-tint text-ink'
                       }`}

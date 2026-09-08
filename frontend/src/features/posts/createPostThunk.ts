@@ -37,6 +37,49 @@ export const getAllPosts = createAsyncThunk(
     const result = await res.json();
     return { posts: result, skip };
 })
+
+// Numbered-pagination version of the home feed — a separate slice of state
+// (postsSlice's `homeFeed`) from `list` above, since `list` is an
+// accumulated cache other pages (Profile, Dashboard) filter by author. Each
+// page here fully replaces the previous one rather than appending.
+export const getPostsPage = createAsyncThunk(
+  'post/getPage',
+  async (params: { page: number; categoryId?: string }, { rejectWithValue }) => {
+    const skip = (params.page - 1) * PAGE_SIZE;
+    const categoryParam = params.categoryId ? `&category_id=${params.categoryId}` : '';
+    const res = await refreshAPI(`/api/posts?skip=${skip}&limit=${PAGE_SIZE}${categoryParam}`);
+    if (!res.ok) {
+        return rejectWithValue((await res.json()).detail);
+    }
+    const posts = await res.json();
+    return { posts, page: params.page };
+  },
+)
+
+export const fetchPostsTotal = createAsyncThunk(
+  'post/total',
+  async (params: { categoryId?: string } | undefined, { rejectWithValue }) => {
+    const categoryParam = params?.categoryId ? `?category_id=${params.categoryId}` : '';
+    const res = await refreshAPI(`/api/posts/count${categoryParam}`);
+    if (!res.ok) {
+        return rejectWithValue((await res.json()).detail);
+    }
+    const result = await res.json();
+    return result.total as number;
+  },
+)
+
+export const fetchSearchTotal = createAsyncThunk(
+  'post/searchTotal',
+  async (q: string, { rejectWithValue }) => {
+    const res = await refreshAPI(`/api/search/count?q=${encodeURIComponent(q)}`);
+    if (!res.ok) {
+        return rejectWithValue((await res.json()).detail);
+    }
+    const result = await res.json();
+    return result.total as number;
+  },
+)
 export const getPost = createAsyncThunk('post/getPost', async (id:{id: string},{rejectWithValue}) => {
     const res = await refreshAPI(`/api/posts/${id.id}`);
     if(!res.ok) {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Check, PenLine, UserMinus, UserPlus } from 'lucide-react';
+import { Check, Loader2, PenLine, UserMinus, UserPlus } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Avatar } from '../components/ui/Avatar';
 import { Button } from '../components/ui/Button';
@@ -23,6 +23,8 @@ export function ProfilePage() {
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
   const [following, setFollowing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
 
   const isSelf = authUser?.id === id;
 
@@ -56,22 +58,32 @@ export function ProfilePage() {
   };
 
   const handleSave = async () => {
-    const result = await dispatch(updateProfile({ display_name: name.trim(), bio: bio.trim() }));
-    if (updateProfile.rejected.match(result)) {
-      dispatch(showToast((result.payload as string) ?? 'Could not update profile'));
-      return;
+    setSaving(true);
+    try {
+      const result = await dispatch(updateProfile({ display_name: name.trim(), bio: bio.trim() }));
+      if (updateProfile.rejected.match(result)) {
+        dispatch(showToast((result.payload as string) ?? 'Could not update profile'));
+        return;
+      }
+      dispatch(showToast('Profile updated', Check));
+      setIsEditing(false);
+    } finally {
+      setSaving(false);
     }
-    dispatch(showToast('Profile updated', Check));
-    setIsEditing(false);
   };
 
   const handleFollow = async () => {
-    const result = await dispatch(followUser({ id: user.id, following }));
-    if (followUser.rejected.match(result)) {
-      dispatch(showToast((result.payload as string) ?? 'Could not update follow'));
-      return;
+    setFollowLoading(true);
+    try {
+      const result = await dispatch(followUser({ id: user.id, following }));
+      if (followUser.rejected.match(result)) {
+        dispatch(showToast((result.payload as string) ?? 'Could not update follow'));
+        return;
+      }
+      setFollowing(!following);
+    } finally {
+      setFollowLoading(false);
     }
-    setFollowing(!following);
   };
 
   return (
@@ -86,11 +98,11 @@ export function ProfilePage() {
             <Textarea label="Bio" value={bio} onChange={(e) => setBio(e.target.value)} className="min-h-[90px]" />
           </div>
           <div className="flex gap-2.5">
-            <Button variant="primary" onClick={handleSave}>
-              <Check size={16} strokeWidth={1.75} />
+            <Button variant="primary" disabled={saving} onClick={handleSave}>
+              {saving ? <Loader2 size={16} strokeWidth={1.75} className="animate-spin" /> : <Check size={16} strokeWidth={1.75} />}
               Save changes
             </Button>
-            <Button onClick={() => setIsEditing(false)}>Cancel</Button>
+            <Button disabled={saving} onClick={() => setIsEditing(false)}>Cancel</Button>
           </div>
         </Card>
       ) : (
@@ -107,10 +119,19 @@ export function ProfilePage() {
               Edit
             </Button>
           ) : authUser ? (
-            <Button size="sm" variant={following ? 'default' : 'primary'} onClick={handleFollow}>
-              {following
-                ? <UserMinus size={14} strokeWidth={1.75} />
-                : <UserPlus size={14} strokeWidth={1.75} />}
+            <Button
+              size="sm"
+              variant={following ? 'default' : 'primary'}
+              disabled={followLoading}
+              onClick={handleFollow}
+            >
+              {followLoading ? (
+                <Loader2 size={14} strokeWidth={1.75} className="animate-spin" />
+              ) : following ? (
+                <UserMinus size={14} strokeWidth={1.75} />
+              ) : (
+                <UserPlus size={14} strokeWidth={1.75} />
+              )}
               {following ? 'Unfollow' : 'Follow'}
             </Button>
           ) : null}

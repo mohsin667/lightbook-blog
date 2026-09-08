@@ -1,4 +1,5 @@
-import { Lock, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { Loader2, Lock, Trash2 } from 'lucide-react';
 import { Avatar } from '../ui/Avatar';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -8,12 +9,32 @@ import type { User } from '../../types';
 export interface UserRowProps {
   user: User;
   postCount: number;
-  onToggleRestrict: (id: string) => void;
-  onDelete: (id: string) => void;
+  onToggleRestrict: (id: string) => void | Promise<void>;
+  onDelete: (id: string) => void | Promise<void>;
 }
 
 export function UserRow({ user, postCount, onToggleRestrict, onDelete }: UserRowProps) {
   const restricted = user.is_banned;
+  const [pending, setPending] = useState<'restrict' | 'delete' | null>(null);
+
+  const handleToggleRestrict = async () => {
+    setPending('restrict');
+    try {
+      await onToggleRestrict(user.id);
+    } finally {
+      setPending(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    setPending('delete');
+    try {
+      await onDelete(user.id);
+    } finally {
+      setPending(null);
+    }
+  };
+
   return (
     <div className="flex items-center flex-wrap gap-3.5 py-3.25 border-b border-border last:border-b-0">
       <Avatar user={user.display_name} size={36} />
@@ -32,12 +53,20 @@ export function UserRow({ user, postCount, onToggleRestrict, onDelete }: UserRow
           {user.email} · {postCount} posts · joined {formatDate(user.created_at)}
         </div>
       </div>
-      <Button size="sm" onClick={() => onToggleRestrict(user.id)}>
-        <Lock size={13} strokeWidth={1.75} />
+      <Button size="sm" disabled={pending !== null} onClick={handleToggleRestrict}>
+        {pending === 'restrict' ? (
+          <Loader2 size={13} strokeWidth={1.75} className="animate-spin" />
+        ) : (
+          <Lock size={13} strokeWidth={1.75} />
+        )}
         {restricted ? 'Unrestrict' : 'Restrict'}
       </Button>
-      <Button size="sm" variant="danger" onClick={() => onDelete(user.id)}>
-        <Trash2 size={13} strokeWidth={1.75} />
+      <Button size="sm" variant="danger" disabled={pending !== null} onClick={handleDelete}>
+        {pending === 'delete' ? (
+          <Loader2 size={13} strokeWidth={1.75} className="animate-spin" />
+        ) : (
+          <Trash2 size={13} strokeWidth={1.75} />
+        )}
         Delete
       </Button>
     </div>

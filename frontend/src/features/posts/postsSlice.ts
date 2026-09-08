@@ -4,6 +4,7 @@ import {
   createPosts, getAllPosts, getPost, getDrafts, searchPosts,
   toggleLike, reportPost, getReportedPosts, dismissFlag, unpublishPost, setFeatured,
   updatePost, publishPost, deletePost, toggleBookmark, getBookmarks, PAGE_SIZE,
+  getPostsPage, fetchPostsTotal, fetchSearchTotal,
 } from './createPostThunk';
 
 interface PostsState {
@@ -12,6 +13,14 @@ interface PostsState {
   searchResults: Post[];
   searchStatus: 'idle' | 'loading' | 'succeeded' | 'failed';
   searchHasMore: boolean;
+  /** Total posts matching the current search query — for numbered pagination. */
+  searchTotal: number;
+  /** Numbered-pagination home feed — a single page's worth of posts, kept
+   * separate from `list` (which Profile/Dashboard rely on accumulating). */
+  homeFeed: Post[];
+  homeFeedStatus: 'idle' | 'loading' | 'succeeded' | 'failed';
+  /** Total published posts (optionally within a category) — for numbered pagination. */
+  total: number;
   /** Posts with open reports, admin-only — from GET /api/admin/reports. */
   reported: ReportedPost[];
   bookmarks: Post[];
@@ -30,6 +39,10 @@ const initialState: PostsState = {
   searchResults: [],
   searchStatus: 'idle',
   searchHasMore: false,
+  searchTotal: 0,
+  homeFeed: [],
+  homeFeedStatus: 'idle',
+  total: 0,
   reported: [],
   bookmarks: [],
   current: null,
@@ -110,16 +123,17 @@ const postsSlice = createSlice({
       state.drafts = action.payload;
     });
 
-    // full-text search
+    // full-text search — numbered pagination, so each page replaces the
+    // previous one rather than appending (unlike the old "Load more" flow).
     builder.addCase(searchPosts.pending, (state) => {
       state.searchStatus = 'loading';
     })
       .addCase(
         searchPosts.fulfilled,
         (state, action: PayloadAction<{ posts: Post[]; skip: number }>) => {
-          const { posts, skip } = action.payload;
+          const { posts } = action.payload;
           state.searchStatus = 'succeeded';
-          state.searchResults = skip === 0 ? posts : [...state.searchResults, ...posts];
+          state.searchResults = posts;
           state.searchHasMore = posts.length === PAGE_SIZE;
         },
       )
@@ -129,6 +143,28 @@ const postsSlice = createSlice({
         state.searchHasMore = false;
         state.error = action.payload as string;
       });
+
+    // numbered-pagination home feed
+    builder.addCase(getPostsPage.pending, (state) => {
+      state.homeFeedStatus = 'loading';
+    })
+      .addCase(getPostsPage.fulfilled, (state, action: PayloadAction<{ posts: Post[]; page: number }>) => {
+        state.homeFeedStatus = 'succeeded';
+        state.homeFeed = action.payload.posts;
+      })
+      .addCase(getPostsPage.rejected, (state, action) => {
+        state.homeFeedStatus = 'failed';
+        state.homeFeed = [];
+        state.error = action.payload as string;
+      });
+
+    builder.addCase(fetchPostsTotal.fulfilled, (state, action: PayloadAction<number>) => {
+      state.total = action.payload;
+    });
+
+    builder.addCase(fetchSearchTotal.fulfilled, (state, action: PayloadAction<number>) => {
+      state.searchTotal = action.payload;
+    });
 
     // like / unlike — the server is the source of truth for the new count
     builder.addCase(

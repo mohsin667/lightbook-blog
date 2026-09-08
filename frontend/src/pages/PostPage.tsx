@@ -125,15 +125,23 @@ export function PostPage() {
         comments={comments}
         currentUserId={authUser?.id}
         isAdmin={authUser?.role === 'admin'}
-        onDelete={(commentId) => {
-          dispatch(deleteComment(commentId));
+        onDelete={async (commentId) => {
+          const result = await dispatch(deleteComment(commentId));
+          if (deleteComment.rejected.match(result)) {
+            dispatch(showToast((result.payload as string) ?? 'Could not delete comment'));
+            return;
+          }
           dispatch(showToast('Comment deleted', Trash2));
         }}
       />
       {authUser ? (
         <CommentForm
-          onSubmit={(text) => {
-            dispatch(addComment({ postId: post.id, content: text }));
+          onSubmit={async (text) => {
+            const result = await dispatch(addComment({ postId: post.id, content: text }));
+            if (addComment.rejected.match(result)) {
+              dispatch(showToast((result.payload as string) ?? 'Could not add comment'));
+              return;
+            }
             dispatch(showToast('Comment added', MessageCircle));
           }}
         />

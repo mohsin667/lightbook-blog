@@ -36,6 +36,8 @@ export function EditorPage() {
   const [loaded, setLoaded] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [savingStatus, setSavingStatus] = useState<'published' | 'draft' | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // drafts aren't in the published list, so make sure they're fetched before
   // deciding the post can't be found
@@ -86,32 +88,37 @@ export function EditorPage() {
       tags,
     };
 
-    if (editing) {
-      const result = await dispatch(updatePost({ id: editing.id, updates: payload }));
-      if (updatePost.rejected.match(result)) {
-        dispatch(showToast((result.payload as string) ?? 'Could not save changes'));
-        return;
-      }
-      if (status === 'published' && editing.status !== 'published') {
-        const published = await dispatch(publishPost(editing.id));
-        if (publishPost.rejected.match(published)) {
-          dispatch(showToast((published.payload as string) ?? 'Could not publish'));
+    setSavingStatus(status);
+    try {
+      if (editing) {
+        const result = await dispatch(updatePost({ id: editing.id, updates: payload }));
+        if (updatePost.rejected.match(result)) {
+          dispatch(showToast((result.payload as string) ?? 'Could not save changes'));
           return;
         }
+        if (status === 'published' && editing.status !== 'published') {
+          const published = await dispatch(publishPost(editing.id));
+          if (publishPost.rejected.match(published)) {
+            dispatch(showToast((published.payload as string) ?? 'Could not publish'));
+            return;
+          }
+        }
+        dispatch(showToast(status === 'published' ? 'Post published' : 'Changes saved', Check));
+      } else {
+        const result = await dispatch(
+          createPosts({ ...payload, publish: status === 'published' }),
+        );
+        if (createPosts.rejected.match(result)) {
+          dispatch(showToast((result.payload as string) ?? 'Could not save post'));
+          return;
+        }
+        dispatch(showToast(status === 'published' ? 'Post published' : 'Draft saved', Check));
       }
-      dispatch(showToast(status === 'published' ? 'Post published' : 'Changes saved', Check));
-    } else {
-      const result = await dispatch(
-        createPosts({ ...payload, publish: status === 'published' }),
-      );
-      if (createPosts.rejected.match(result)) {
-        dispatch(showToast((result.payload as string) ?? 'Could not save post'));
-        return;
-      }
-      dispatch(showToast(status === 'published' ? 'Post published' : 'Draft saved', Check));
-    }
 
-    navigate(status === 'published' ? '/' : '/dashboard');
+      navigate(status === 'published' ? '/' : '/dashboard');
+    } finally {
+      setSavingStatus(null);
+    }
   };
 
   const handleGenerate = async () => {
@@ -144,13 +151,18 @@ export function EditorPage() {
 
   const handleDelete = async () => {
     if (!editing) return;
-    const result = await dispatch(deletePost(editing.id));
-    if (deletePost.rejected.match(result)) {
-      dispatch(showToast((result.payload as string) ?? 'Could not delete post'));
-      return;
+    setDeleting(true);
+    try {
+      const result = await dispatch(deletePost(editing.id));
+      if (deletePost.rejected.match(result)) {
+        dispatch(showToast((result.payload as string) ?? 'Could not delete post'));
+        return;
+      }
+      dispatch(showToast('Post deleted', Trash2));
+      navigate('/dashboard');
+    } finally {
+      setDeleting(false);
     }
-    dispatch(showToast('Post deleted', Trash2));
-    navigate('/dashboard');
   };
 
   const uploadFile = async (file: File) => {
@@ -333,17 +345,40 @@ export function EditorPage() {
       </div>
 
       <div className="flex gap-2.5 flex-wrap">
-        <Button variant="primary" disabled={uploading} onClick={() => handleSave('published')}>
-          <Check size={16} strokeWidth={1.75} />
+        <Button
+          variant="primary"
+          disabled={uploading || savingStatus !== null || deleting}
+          onClick={() => handleSave('published')}
+        >
+          {savingStatus === 'published' ? (
+            <Loader2 size={16} strokeWidth={1.75} className="animate-spin" />
+          ) : (
+            <Check size={16} strokeWidth={1.75} />
+          )}
           {editing?.status === 'published' ? 'Save changes' : 'Publish'}
         </Button>
-        <Button disabled={uploading} onClick={() => handleSave('draft')}>
-          <FileText size={16} strokeWidth={1.75} />
+        <Button
+          disabled={uploading || savingStatus !== null || deleting}
+          onClick={() => handleSave('draft')}
+        >
+          {savingStatus === 'draft' ? (
+            <Loader2 size={16} strokeWidth={1.75} className="animate-spin" />
+          ) : (
+            <FileText size={16} strokeWidth={1.75} />
+          )}
           Save as draft
         </Button>
         {editing && (
-          <Button variant="danger" onClick={handleDelete}>
-            <Trash2 size={16} strokeWidth={1.75} />
+          <Button
+            variant="danger"
+            disabled={deleting || savingStatus !== null}
+            onClick={handleDelete}
+          >
+            {deleting ? (
+              <Loader2 size={16} strokeWidth={1.75} className="animate-spin" />
+            ) : (
+              <Trash2 size={16} strokeWidth={1.75} />
+            )}
             Delete
           </Button>
         )}

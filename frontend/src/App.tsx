@@ -26,6 +26,7 @@ function App() {
   const authStatus = useAppSelector((s) => s.auth.status);
   const categoriesStatus = useAppSelector((s) => s.categories.status);
   const postsStatus = useAppSelector((s) => s.posts.status);
+  const homeFeedStatus = useAppSelector((s) => s.posts.homeFeedStatus);
 
   useEffect(() => {
     dispatch(checkAuth())
@@ -34,13 +35,18 @@ function App() {
     dispatch(getTopAuthors())
   }, [dispatch])
 
-  // Gate the very first paint on the three fetches HomePage actually needs
-  // (auth, categories, posts) so visitors see a loader instead of an empty
-  // "No posts yet" flash while data is still in flight. Top authors is
-  // sidebar-only content, so it's left out — it can pop in after.
-  const dataLoading = [authStatus, categoriesStatus, postsStatus].some(
-    (s) => s === 'idle' || s === 'loading',
-  );
+  // Gate the very first paint on auth + categories + the accumulated posts
+  // list (used for the featured hero) always, and ALSO the numbered home
+  // feed's first page — but only when that's actually the page being
+  // landed on. HomePage is the only route that ever touches homeFeedStatus,
+  // so gating on it unconditionally would mean the loader never clears on
+  // a direct link to e.g. /post/:id or /dashboard, since nothing would ever
+  // move it off 'idle'.
+  const isHomeRoute = window.location.pathname === '/';
+  const requiredStatuses = isHomeRoute
+    ? [authStatus, categoriesStatus, postsStatus, homeFeedStatus]
+    : [authStatus, categoriesStatus, postsStatus];
+  const dataLoading = requiredStatuses.some((s) => s === 'idle' || s === 'loading');
 
   // The loader is deliberately kept on screen for at least MIN_DISPLAY_MS
   // even if the real data finishes loading faster than that — otherwise on

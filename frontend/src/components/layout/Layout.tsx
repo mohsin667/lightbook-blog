@@ -5,6 +5,7 @@ import { BottomNav } from './BottomNav';
 import { ChatWidget } from '../chat/ChatWidget';
 import { useAppDispatch, useAppSelector } from '../../app/hooks';
 import { toggleRole } from '../../features/users/usersSlice';
+import { useSmoothScroll } from '../../hooks/useSmoothScroll';
 
 export function Layout() {
   const dispatch = useAppDispatch();
@@ -12,6 +13,7 @@ export function Layout() {
   const { user } = useAppSelector((state) => state.auth);
   const isAuthenticated = !!user;
   const location = useLocation();
+  useSmoothScroll();
 
   return (
     <div className="min-h-screen flex flex-col">
