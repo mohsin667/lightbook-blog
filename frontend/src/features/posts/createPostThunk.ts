@@ -25,6 +25,10 @@ export const createPosts = createAsyncThunk('post/create', async (input: CreateP
 })
 
 export const PAGE_SIZE = 20;
+// Numbered-pagination views (home feed, search) show fewer posts per page
+// than the accumulated `list` used by Profile/Dashboard — kept as its own
+// constant so changing one doesn't affect the other.
+export const FEED_PAGE_SIZE = 6;
 
 export const getAllPosts = createAsyncThunk(
   'post/getAll',
@@ -45,9 +49,9 @@ export const getAllPosts = createAsyncThunk(
 export const getPostsPage = createAsyncThunk(
   'post/getPage',
   async (params: { page: number; categoryId?: string }, { rejectWithValue }) => {
-    const skip = (params.page - 1) * PAGE_SIZE;
+    const skip = (params.page - 1) * FEED_PAGE_SIZE;
     const categoryParam = params.categoryId ? `&category_id=${params.categoryId}` : '';
-    const res = await refreshAPI(`/api/posts?skip=${skip}&limit=${PAGE_SIZE}${categoryParam}`);
+    const res = await refreshAPI(`/api/posts?skip=${skip}&limit=${FEED_PAGE_SIZE}${categoryParam}`);
     if (!res.ok) {
         return rejectWithValue((await res.json()).detail);
     }
@@ -94,7 +98,7 @@ export const searchPosts = createAsyncThunk(
   async (params:{q: string; skip?: number},{rejectWithValue}) => {
     const skip = params.skip ?? 0;
     const res = await refreshAPI(
-        `/api/search?q=${encodeURIComponent(params.q)}&skip=${skip}&limit=${PAGE_SIZE}`);
+        `/api/search?q=${encodeURIComponent(params.q)}&skip=${skip}&limit=${FEED_PAGE_SIZE}`);
     if(!res.ok) {
         return rejectWithValue((await res.json()).detail);
     }

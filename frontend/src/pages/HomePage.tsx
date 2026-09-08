@@ -8,7 +8,7 @@ import { getIconForCategoryName } from '../components/post/CategoryBadge';
 import { Card } from '../components/ui/Card';
 import { Avatar } from '../components/ui/Avatar';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
-import { getPostsPage, fetchPostsTotal, PAGE_SIZE } from '../features/posts/createPostThunk';
+import { getPostsPage, fetchPostsTotal, FEED_PAGE_SIZE } from '../features/posts/createPostThunk';
 
 const ALL = 'ALL';
 
@@ -29,7 +29,7 @@ export function HomePage() {
     : categories.slice(0, CATEGORY_PREVIEW_COUNT);
 
   const categoryId = filter === ALL ? undefined : filter;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / FEED_PAGE_SIZE));
 
   useEffect(() => {
     dispatch(getPostsPage({ page, categoryId }));

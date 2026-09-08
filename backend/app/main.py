@@ -195,6 +195,17 @@ def get_draft_posts(
     posts = session.exec(statement).all()
     return serialize_posts(posts, session, current_user)
 
+@app.get("/api/posts/count")
+def get_posts_count(
+    category_id: str | None = Query(default=None),
+    session: Session = Depends(get_session),
+):
+    conditions = [Post.status == PostType.published]
+    if category_id:
+        conditions.append(Post.category_id == category_id)
+    total = session.exec(select(func.count()).select_from(Post).where(*conditions)).one()
+    return {"total": total}
+
 @app.get("/api/posts/{slug}", response_model=PostPublic)
 def get_post_by_slug(
     slug: str,
@@ -240,17 +251,6 @@ def get_posts(
     )
     posts = session.exec(statement).all()
     return serialize_posts(posts, session, current_user)
-
-@app.get("/api/posts/count")
-def get_posts_count(
-    category_id: str | None = Query(default=None),
-    session: Session = Depends(get_session),
-):
-    conditions = [Post.status == PostType.published]
-    if category_id:
-        conditions.append(Post.category_id == category_id)
-    total = session.exec(select(func.count()).select_from(Post).where(*conditions)).one()
-    return {"total": total}
 
 @app.get("/api/search/count")
 def get_search_count(q: str = Query(min_length=1), session: Session = Depends(get_session)):

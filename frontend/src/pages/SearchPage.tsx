@@ -5,7 +5,7 @@ import { PostGrid } from '../components/post/PostGrid';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Pagination } from '../components/ui/Pagination';
 import { useAppDispatch, useAppSelector } from '../app/hooks';
-import { searchPosts, fetchSearchTotal, PAGE_SIZE } from '../features/posts/createPostThunk';
+import { searchPosts, fetchSearchTotal, FEED_PAGE_SIZE } from '../features/posts/createPostThunk';
 
 export function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -24,7 +24,7 @@ export function SearchPage() {
 
   useEffect(() => {
     const q = query.trim();
-    if (q) dispatch(searchPosts({ q, skip: (page - 1) * PAGE_SIZE }));
+    if (q) dispatch(searchPosts({ q, skip: (page - 1) * FEED_PAGE_SIZE }));
   }, [dispatch, query, page]);
 
   useEffect(() => {
@@ -33,7 +33,7 @@ export function SearchPage() {
   }, [dispatch, query]);
 
   const submit = () => setSearchParams(input.trim() ? { q: input.trim() } : {});
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / FEED_PAGE_SIZE));
 
   return (
     <div className="max-w-[1080px] mx-auto px-6 pt-7">
