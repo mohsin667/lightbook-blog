@@ -45,12 +45,22 @@ anything. You can only answer questions about existing posts.
 def build_context(posts: list[dict]) -> str:
     """Formats retrieved posts into the context block given to the LLM.
     Content is truncated per post to keep the prompt (and cost) bounded.
-    Includes author name explicitly — questions like "who wrote this" are
-    unanswerable otherwise, since it's not part of the post body itself."""
+    Includes author name, category, tags, and cover image description
+    explicitly — questions like "who wrote this", "what category is this
+    in", or "what does the cover image show" are unanswerable otherwise,
+    since none of that is part of the post body text itself."""
     blocks = []
     for post in posts:
         excerpt = post["content"][:1200]
-        blocks.append(f'Title: "{post["title"]}"\nAuthor: {post["author_name"]}\n{excerpt}')
+        lines = [f'Title: "{post["title"]}"', f'Author: {post["author_name"]}']
+        if post.get("category_name"):
+            lines.append(f'Category: {post["category_name"]}')
+        if post.get("tags"):
+            lines.append(f'Tags: {", ".join(post["tags"])}')
+        if post.get("cover_image_description"):
+            lines.append(f'Cover image shows: {post["cover_image_description"]}')
+        lines.append(excerpt)
+        blocks.append("\n".join(lines))
     return "\n\n---\n\n".join(blocks)
 
 

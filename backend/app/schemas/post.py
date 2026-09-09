@@ -36,6 +36,7 @@ class PostPublic(BaseModel):
     updated_at: datetime
     published_at: Optional[datetime] = None
     cover_image_url: Optional[str] = None
+    cover_image_description: Optional[str] = None
     is_featured: bool = False
     liked_by_me: bool = False
     bookmarked_by_me: bool = False

@@ -20,7 +20,7 @@ from app.deps import (
     get_current_user, generate_slug, generate_username, get_current_user_optional,
     get_owned_post, apply_publish, require_admin, generate_category_slug,
     get_or_create_tags, sync_post_tags, serialize_post, serialize_posts,
-    serialize_user_summary, serialize_comment, sync_post_embedding
+    serialize_user_summary, serialize_comment, sync_post_embedding, sync_cover_image_caption
 )
 from app.schemas.post import (
     PostPublic, PostCreate, PostUpdate, CategoryCreate, CategoryPublic, TagPublic,
@@ -166,6 +166,8 @@ def create_post(data: PostCreate, session: Session = Depends(get_session), curre
 )
     if data.publish:
         apply_publish(post)
+
+    sync_cover_image_caption(post, previous_url=None)
 
     session.add(post)
     session.commit()
@@ -383,6 +385,43 @@ def chat(
         )
         posts = session.exec(statement).all()
 
+        if not posts:
+            # No semantic match — try the same keyword fallback
+            # /api/search/semantic already uses, so a question quoting a
+            # title/word verbatim (e.g. "do you have a post on BFS") still
+            # finds it even if the embedding similarity missed it (e.g. a
+            # post whose embedding failed to generate at publish time).
+            pattern = f"%{data.message}%"
+            posts = session.exec(
+                select(Post)
+                .where(
+                    Post.status == PostType.published,
+                    (Post.title.ilike(pattern)) | (Post.excerpt.ilike(pattern)) | (Post.content.ilike(pattern)),
+                )
+                .order_by(Post.published_at.desc())
+                .limit(CHAT_CONTEXT_POST_LIMIT)
+            ).all()
+
+        if not posts:
+            # Still nothing — check whether the question names a category
+            # ("do you have anything on fashion?", "posts in DSA") rather
+            # than a specific post.
+            categories = session.exec(select(Category)).all()
+            message_lower = data.message.lower()
+            matched_category = next(
+                (c for c in categories if c.name.lower() in message_lower), None
+            )
+            if matched_category:
+                posts = session.exec(
+                    select(Post)
+                    .where(
+                        Post.category_id == matched_category.id,
+                        Post.status == PostType.published,
+                    )
+                    .order_by(Post.published_at.desc())
+                    .limit(CHAT_CONTEXT_POST_LIMIT)
+                ).all()
+
         if not posts and data.previous_sources:
             # No independent topical match — but if this looks like a
             # follow-up on what was just discussed (frontend sent the
@@ -406,19 +445,34 @@ def chat(
         posts_with_authors = []
         for p in posts:
             author = session.get(User, p.author_id)
+            category = session.get(Category, p.category_id) if p.category_id else None
+            tags = session.exec(
+                select(Tag.name).join(PostTag, PostTag.tag_id == Tag.id).where(PostTag.post_id == p.id)
+            ).all()
             posts_with_authors.append({
                 "title": p.title,
                 "content": p.content,
                 "author_name": author.display_name if author else "Unknown",
+                "category_name": category.name if category else None,
+                "tags": tags,
+                "cover_image_description": p.cover_image_description,
             })
 
         answer = generate_answer(data.message, posts_with_authors)
         if answer is None:
             return None
 
+        # The `posts` list may only be here via the previous_sources
+        # fallback above (a guess that this is a follow-up), not a real
+        # topical match. If the LLM's own answer says it doesn't have
+        # anything relevant — per its system-prompt instructions — trust
+        # that over our guess and don't attach sources that contradict
+        # the answer we're actually returning.
+        is_refusal = "don't have a post" in answer.lower() or "no post" in answer.lower()
+
         return {
             "answer": answer,
-            "sources": [{"title": p.title, "slug": p.slug} for p in posts],
+            "sources": [] if is_refusal else [{"title": p.title, "slug": p.slug} for p in posts],
         }
 
     # Include previous_sources in the cache key — the same question text
@@ -520,11 +574,14 @@ def update_post(
     session: Session = Depends(get_session),
 ):
     post = get_owned_post(post_id, current_user, session)
+    previous_cover_url = post.cover_image_url
 
     updates = data.model_dump(exclude_unset=True)
     tag_names = updates.pop("tags", None)
     for field, value in updates.items():
         setattr(post, field, value)
+
+    sync_cover_image_caption(post, previous_url=previous_cover_url)
 
     post.updated_at = datetime.now(timezone.utc)
 

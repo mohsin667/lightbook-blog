@@ -13,11 +13,13 @@ embedder = CloudflareWorkersAIEmbeddings(
     model_name=settings.workers_ai_embedding_model,
 )
 
-def content_hash(title: str, content: str) -> str:
+def content_hash(title: str, content: str, extra: str = "") -> str:
     """Fingerprint of a post's meaning-relevant text. Used to skip re-embedding
-     when  a save didn't actually change  title/content."""
+     when a save didn't actually change title/content/extra (extra covers
+     category name + cover image caption, so a category change or a new
+     cover image also triggers a re-embed)."""
 
-    return hashlib.sha256(f"{title}\n\n{content}".encode("utf-8")).hexdigest()
+    return hashlib.sha256(f"{title}\n\n{content}\n\n{extra}".encode("utf-8")).hexdigest()
 
 def embed_text(text: str) -> list[float] | None:
     """Call Cloudflare Workers AI to embed text. Never raises — returns

@@ -5,6 +5,7 @@ from app.models.user import User, Follow
 from app.core.security import decode_token
 from app.core.db import get_session
 from app.core.embeddings import content_hash, embed_text
+from app.core.image_caption import caption_image
 from sqlmodel import Session, select, func
 from app.models.post import Post, PostType, Category, Tag, PostTag, PostLike, Bookmark
 import re, secrets, math
@@ -75,18 +76,32 @@ def apply_publish(post: Post) -> None:
         post.published_at = datetime.now(timezone.utc)
 
 def sync_post_embedding(post: Post, session: Session) -> None:
-    """Re-embed a post's title+content if it's published and the content
+    """Re-embed a post's title+content (plus category name and cover image
+    caption, when present) if it's published and that meaning-relevant text
     actually changed since the last embed (content-hash cache). Drafts are
     skipped — no point spending an API call on content nobody can search
-    for yet."""
+    for yet. Including category + image caption means a category change or
+    a new cover image alone is enough to trigger a re-embed, so chat/search
+    retrieval can match on them too."""
     if post.status != PostType.published:
         return
 
-    new_hash = content_hash(post.title, post.content)
-    if new_hash == post.content_hash:
-        return 
+    category_name = ""
+    if post.category_id:
+        category = session.get(Category, post.category_id)
+        category_name = category.name if category else ""
 
-    vector = embed_text(f"{post.title}\n\n{post.content}")
+    extra = "\n".join(p for p in (category_name, post.cover_image_description) if p)
+
+    new_hash = content_hash(post.title, post.content, extra)
+    if new_hash == post.content_hash:
+        return
+
+    embed_input = f"{post.title}\n\n{post.content}"
+    if extra:
+        embed_input += f"\n\n{extra}"
+
+    vector = embed_text(embed_input)
     if vector is None:
         return  # call failed — leave content_hash as-is so the next save retries
 
@@ -94,6 +109,18 @@ def sync_post_embedding(post: Post, session: Session) -> None:
     post.content_hash = new_hash
     session.add(post)
     session.commit()
+
+def sync_cover_image_caption(post: Post, previous_url: str | None) -> None:
+    """Generates a fresh caption for the cover image via a vision model,
+    but only when the URL actually changed (new upload, or newly added) —
+    skipped if unset or unchanged, so a save that didn't touch the image
+    doesn't re-run a vision-model call every time. Best-effort: leaves any
+    existing caption in place if the call fails, rather than blanking it."""
+    if not post.cover_image_url or post.cover_image_url == previous_url:
+        return
+    caption = caption_image(post.cover_image_url)
+    if caption is not None:
+        post.cover_image_description = caption
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != "admin":

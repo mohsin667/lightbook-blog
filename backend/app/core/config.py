@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     cloudflare_api_token: str
     workers_ai_embedding_model: str = "@cf/baai/bge-m3"
     workers_ai_chat_model: str = "@cf/meta/llama-3.1-8b-instruct"
+    workers_ai_vision_model: str = "@cf/llava-hf/llava-1.5-7b-hf"
     model_config = SettingsConfigDict(env_file=".env")
 
 
