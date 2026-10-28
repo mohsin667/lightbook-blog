@@ -32,6 +32,7 @@ langchain-community>=0.3.20
 langchain-cloudflare>=0.1.0
 passlib==1.7.4
 pgvector==0.3.6
+Pillow==12.3.0
 psycopg2-binary==2.9.12
 pyasn1==0.6.4
 pycparser==3.0

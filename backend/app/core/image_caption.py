@@ -1,6 +1,8 @@
+import io
 import logging
 
 import httpx
+from PIL import Image
 
 from app.core.config import settings
 
@@ -21,6 +23,27 @@ _HEADERS = {"Authorization": f"Bearer {settings.cloudflare_api_token}"}
 # let a slow/hung Cloudflare call block that indefinitely.
 _TIMEOUT_SECONDS = 20.0
 
+# Cover images are unoptimized author uploads (a phone photo can be several
+# MB) — sent as a raw JSON array of bytes, that easily exceeds Cloudflare's
+# request size limit (a real 413 seen in practice on this app's own
+# images). The vision model doesn't need full resolution to caption a
+# scene, so downscale/recompress before sending — this keeps every request
+# small regardless of how large the original upload was.
+_MAX_DIMENSION = 768
+_JPEG_QUALITY = 80
+
+
+def _resize_for_captioning(raw_bytes: bytes) -> bytes:
+    """Downscales to at most _MAX_DIMENSION on the long edge and
+    re-encodes as JPEG, so the payload sent to Cloudflare stays small no
+    matter how large the original upload was."""
+    image = Image.open(io.BytesIO(raw_bytes))
+    image = image.convert("RGB")
+    image.thumbnail((_MAX_DIMENSION, _MAX_DIMENSION))
+    buffer = io.BytesIO()
+    image.save(buffer, format="JPEG", quality=_JPEG_QUALITY)
+    return buffer.getvalue()
+
 
 def caption_image(image_url: str) -> str | None:
     """Fetches the image at `image_url` and asks a vision model to describe
@@ -30,7 +53,8 @@ def caption_image(image_url: str) -> str | None:
     try:
         image_response = httpx.get(image_url, timeout=_TIMEOUT_SECONDS)
         image_response.raise_for_status()
-        image_bytes = list(image_response.content)
+        resized_bytes = _resize_for_captioning(image_response.content)
+        image_bytes = list(resized_bytes)
 
         caption_response = httpx.post(
             _INFERENCE_URL,
