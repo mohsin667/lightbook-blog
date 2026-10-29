@@ -4,7 +4,7 @@ from fastapi import Depends, Cookie, HTTPException
 from app.models.user import User, Follow
 from app.core.security import decode_token
 from app.core.db import get_session
-from app.core.embeddings import content_hash, embed_text
+from app.core.embeddings import build_embed_input, content_hash, embed_text
 from app.core.image_caption import caption_image
 from sqlmodel import Session, select, func
 from app.models.post import Post, PostType, Category, Tag, PostTag, PostLike, Bookmark
@@ -91,15 +91,13 @@ def sync_post_embedding(post: Post, session: Session) -> None:
         category = session.get(Category, post.category_id)
         category_name = category.name if category else ""
 
-    extra = "\n".join(p for p in (category_name, post.cover_image_description) if p)
+    embed_input, extra = build_embed_input(
+        post.title, post.content, category_name, post.cover_image_description
+    )
 
     new_hash = content_hash(post.title, post.content, extra)
     if new_hash == post.content_hash:
         return
-
-    embed_input = f"{post.title}\n\n{post.content}"
-    if extra:
-        embed_input += f"\n\n{extra}"
 
     vector = embed_text(embed_input)
     if vector is None:

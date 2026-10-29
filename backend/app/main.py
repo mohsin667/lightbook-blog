@@ -29,7 +29,7 @@ from app.schemas.post import (
 from app.models.post import (
     Post, PostType, Category, Tag, PostTag, PostLike, Bookmark, Comment, PostReport,
 )
-from sqlmodel import func
+from sqlmodel import func, case
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.core.chat_llm import generate_answer
 from app.core.search_cache import get_or_generate_chat_answer
@@ -325,6 +325,11 @@ def semantic_search(
     return serialize_posts(posts, session, current_user)
 
 CHAT_CONTEXT_POST_LIMIT = 3
+CHAT_STOPWORDS = {
+    "which", "post", "posts", "cover", "image", "that", "this", "with", "showing",
+    "shows", "show", "find", "have", "does", "about", "what", "where", "from",
+    "there", "their", "into", "give", "tell", "title", "summary", "short",
+}
 
 def get_suggested_questions(session: Session, limit: int = 3) -> list[str]:
     """Suggests a few starter questions grounded in categories that
@@ -391,16 +396,35 @@ def chat(
             # title/word verbatim (e.g. "do you have a post on BFS") still
             # finds it even if the embedding similarity missed it (e.g. a
             # post whose embedding failed to generate at publish time).
-            pattern = f"%{data.message}%"
-            posts = session.exec(
-                select(Post)
-                .where(
-                    Post.status == PostType.published,
-                    (Post.title.ilike(pattern)) | (Post.excerpt.ilike(pattern)) | (Post.content.ilike(pattern)),
-                )
-                .order_by(Post.published_at.desc())
-                .limit(CHAT_CONTEXT_POST_LIMIT)
-            ).all()
+            # Whole-sentence ilike never matches a natural-language question,
+            # so also try each meaningful word — against the cover image
+            # caption too, which lets "the post with the red 9 3/4 sign"
+            # find a post by what its cover shows.
+            # Ranked by how many distinct words match (cover caption weighted
+            # highest, then title), whole-word only — substring matching let
+            # "red" hit "reduce" and newest-first ordering buried the post
+            # actually being described.
+            words = {
+                w for w in re.findall(r"[a-z0-9]+", data.message.lower())
+                if len(w) > 3 and w not in CHAT_STOPWORDS
+            }
+            if words:
+                score = 0
+                for w in words:
+                    pat = r"\m" + re.escape(w.rstrip("s")) + r"s?\M"
+                    score = (
+                        score
+                        + case((Post.cover_image_description.op("~*")(pat), 3), else_=0)
+                        + case((Post.title.op("~*")(pat), 2), else_=0)
+                        + case((Post.excerpt.op("~*")(pat), 1), else_=0)
+                        + case((Post.content.op("~*")(pat), 1), else_=0)
+                    )
+                posts = session.exec(
+                    select(Post)
+                    .where(Post.status == PostType.published, score >= 3)
+                    .order_by(score.desc(), Post.published_at.desc())
+                    .limit(CHAT_CONTEXT_POST_LIMIT)
+                ).all()
 
         if not posts:
             # Still nothing — check whether the question names a category

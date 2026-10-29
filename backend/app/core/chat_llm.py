@@ -39,7 +39,13 @@ blog (general trivia, writing unrelated code, personal advice, or anything not g
 lightbook post).
 4. You cannot take actions on the user's behalf — you cannot publish, edit, delete, or modify \
 anything. You can only answer questions about existing posts.
-5. Keep answers concise, and mention which post(s) the answer is drawn from by title."""
+5. Cover image descriptions are short, auto-generated captions and often omit details \
+(colors, exact text, background). When the user asks which post has a certain cover image, pick \
+the post whose "Cover image shows" line is the closest reasonable match to what they describe, \
+even if the caption lacks some of the details they mention — do not refuse just because a detail \
+isn't in the caption, as long as the post's title, tags, category or content are consistent with \
+the description. Only say you don't have such a post if no excerpt is plausibly a match.
+6. Keep answers concise, and mention which post(s) the answer is drawn from by title."""
 
 
 def build_context(posts: list[dict]) -> str:
@@ -58,7 +64,8 @@ def build_context(posts: list[dict]) -> str:
         if post.get("tags"):
             lines.append(f'Tags: {", ".join(post["tags"])}')
         if post.get("cover_image_description"):
-            lines.append(f'Cover image shows: {post["cover_image_description"]}')
+            lines.append(
+                f'Cover image shows: {post["cover_image_description"]}')
         lines.append(excerpt)
         blocks.append("\n".join(lines))
     return "\n\n---\n\n".join(blocks)
@@ -78,5 +85,6 @@ def generate_answer(question: str, posts: list[dict]) -> str | None:
         ])
         return response.content
     except Exception:
-        logger.exception("Failed to generate chat answer via Cloudflare Workers AI")
+        logger.exception(
+            "Failed to generate chat answer via Cloudflare Workers AI")
         return None

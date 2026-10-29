@@ -61,9 +61,11 @@ def caption_image(image_url: str) -> str | None:
             headers=_HEADERS,
             json={
                 "image": image_bytes,
-                "prompt": "Describe this image in one concise sentence, as a plain "
-                "factual caption for a blog post's cover image.",
-                "max_tokens": 100,
+                "prompt": "Describe this image as a factual caption for a blog post's "
+                "cover image, in one or two sentences. Name the main objects, their "
+                "colors, any visible text or numbers exactly as written (e.g. 9 3/4 "
+                "as 9 3/4), and the setting or background.",
+                "max_tokens": 150,
             },
             timeout=_TIMEOUT_SECONDS,
         )

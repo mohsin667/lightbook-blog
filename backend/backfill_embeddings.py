@@ -17,10 +17,10 @@ import time
 from sqlmodel import Session, select
 
 from app.core.db import engine
-from app.core.embeddings import content_hash, embed_text
+from app.core.embeddings import build_embed_input, content_hash, embed_text
 from app.models.user import User  # noqa: F401 — must be imported so SQLAlchemy can
                                     # resolve Post.author_id's foreign key to user.id
-from app.models.post import Post, PostType
+from app.models.post import Category, Post, PostType
 
 # Small delay between calls so we don't burst Cloudflare's free-tier rate
 # limits — 202 posts at this pace takes a few minutes, comfortably within
@@ -34,9 +34,18 @@ def main() -> None:
             select(Post).where(Post.status == PostType.published)
         ).all()
 
+        def prepare(post: Post) -> tuple[str, str]:
+            # Mirrors sync_post_embedding in app/deps.py exactly (category +
+            # cover caption), so the hashes agree and image-description
+            # questions can match.
+            category = session.get(Category, post.category_id) if post.category_id else None
+            return build_embed_input(
+                post.title, post.content, category.name if category else "", post.cover_image_description
+            )
+
         to_embed = [
             post for post in posts
-            if content_hash(post.title, post.content) != post.content_hash
+            if content_hash(post.title, post.content, prepare(post)[1]) != post.content_hash
         ]
 
         print(f"{len(posts)} published posts total, {len(to_embed)} need embedding.\n")
@@ -45,7 +54,8 @@ def main() -> None:
         failed = 0
 
         for i, post in enumerate(to_embed, start=1):
-            vector = embed_text(f"{post.title}\n\n{post.content}")
+            embed_input, extra = prepare(post)
+            vector = embed_text(embed_input)
             if vector is None:
                 failed += 1
                 print(f"[{i}/{len(to_embed)}] FAILED: {post.title!r}")
@@ -53,7 +63,7 @@ def main() -> None:
                 continue
 
             post.embedding = vector
-            post.content_hash = content_hash(post.title, post.content)
+            post.content_hash = content_hash(post.title, post.content, extra)
             session.add(post)
             session.commit()
             embedded += 1
